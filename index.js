@@ -8,14 +8,18 @@ app.get("/", (req, res) => res.send("RO-12 bot is alive"));
 app.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT}`));
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+  intents: [
+    GatewayIntentBits.Guilds, 
+    GatewayIntentBits.GuildMessages, 
+    GatewayIntentBits.MessageContent, 
+    GatewayIntentBits.GuildMembers
+  ]
 });
 
 const TOKEN = process.env.TOKEN;
 let data = loadData();
 let activeVoyage = null;
 let voyageId = 1;
-const ONE_DAY = 24 * 60 * 60 * 1000;
 
 function loadData() {
   try {
@@ -37,6 +41,28 @@ function getRouteData(code) {
   return { name: "Unknown", multiplier: 1 };
 }
 
+function sendVoyageEmbed(client) {
+  if (!activeVoyage || activeVoyage.salesOpen) return;
+  activeVoyage.salesOpen = true;
+  const ch = client.channels.cache.find(c => c.name === "voyages");
+  if (ch) {
+    ch.send({ embeds: [{
+      color: 0x0099ff, title: "🚢 NEW VOYAGE SALES OPEN",
+      fields: [
+        { name: "From", value: activeVoyage.from, inline: true },
+        { name: "To", value: activeVoyage.to, inline: true },
+        { name: "Ship", value: activeVoyage.ship, inline: false },
+        { name: "Captain", value: activeVoyage.captain, inline: true },
+        { name: "F/O", value: activeVoyage.fo, inline: true },
+        { name: "GC", value: activeVoyage.gc || "None", inline: true },
+        { name: "Departing", value: activeVoyage.departure, inline: true },
+        { name: "Route", value: activeVoyage.length, inline: true },
+        { name: "Price", value: `$${50 * activeVoyage.multiplier}`, inline: true }
+      ]
+    }]});
+  }
+}
+
 client.once("ready", () => console.log(`Logged in as ${client.user.tag}`));
 
 client.on("messageCreate", async (message) => {
@@ -45,16 +71,39 @@ client.on("messageCreate", async (message) => {
   const content = message.content;
   const channel = message.channel.name;
 
-  // !setvoyage
+  const hasPermission = message.member?.roles.cache.some(r => ["Owner", "Admin", "Captain"].includes(r.name));
+
+  if (content.startsWith("!cancelvoyage")) {
+    if (!hasPermission) return message.reply("❌ You don't have permission to cancel voyages.");
+    if (!activeVoyage) return message.reply("❌ No active voyage to cancel.");
+    
+    const reason = content.split("!cancelvoyage ")[1] || "No reason provided.";
+    const chVoyages = client.channels.cache.find(c => c.name === "voyages");
+    const chStaff = client.channels.cache.find(c => c.name === "staff");
+    
+    const cancelMsg = `🚫 VOYAGE CANCELLED\nReason: ${reason}`;
+    if (chVoyages) chVoyages.send(cancelMsg);
+    if (chStaff) chStaff.send(cancelMsg);
+    
+    activeVoyage = null;
+    data.seatMap = {};
+    data.cabinMap = {};
+    for (let id in data.users) {
+        data.users[id].seat = null;
+        data.users[id].cabin = null;
+    }
+    saveData();
+    return;
+  }
+
   if (content.startsWith("!setvoyage")) {
     if (channel !== "staff") return;
     const [_, from, to, length] = content.split(" ");
     const route = getRouteData(length);
-    activeVoyage = { id: voyageId++, from, to, length: route.name, multiplier: route.multiplier, ship: "RO-12", captain: null, fo: null, gc: null, departure: "27th June", salesOpen: false };
+    activeVoyage = { id: voyageId++, from, to, length: route.name, multiplier: route.multiplier, ship: "RO-12", captain: null, fo: null, gc: null, departure: "27th June", salesOpen: false, timerSet: false };
     return message.channel.send(`🚢 VOYAGE CREATED: ${from} → ${to} (${route.name})`);
   }
 
-  // !claim
   if (content.startsWith("!claim")) {
     if (!activeVoyage) return message.reply("❌ No active voyage.");
     const role = content.split(" ")[1];
@@ -64,29 +113,15 @@ client.on("messageCreate", async (message) => {
     else return;
     message.reply(`${role} claimed.`);
 
-    if (activeVoyage.captain && activeVoyage.fo && !activeVoyage.salesOpen) {
-      activeVoyage.salesOpen = true;
-      const ch = client.channels.cache.find(c => c.name === "voyages");
-      if (ch) {
-        ch.send({ embeds: [{
-          color: 0x0099ff, title: "🚢 NEW VOYAGE SALES OPEN",
-          fields: [
-            { name: "From", value: activeVoyage.from, inline: true },
-            { name: "To", value: activeVoyage.to, inline: true },
-            { name: "Ship", value: activeVoyage.ship, inline: false },
-            { name: "Captain", value: activeVoyage.captain, inline: true },
-            { name: "F/O", value: activeVoyage.fo, inline: true },
-            { name: "GC", value: activeVoyage.gc || "None", inline: true },
-            { name: "Departing", value: activeVoyage.departure, inline: true },
-            { name: "Route", value: activeVoyage.length, inline: true },
-            { name: "Price", value: `$${50 * activeVoyage.multiplier}`, inline: true }
-          ]
-        }]});
-      }
+    if (activeVoyage.captain && activeVoyage.fo && activeVoyage.gc && !activeVoyage.salesOpen) {
+      sendVoyageEmbed(client);
+    } else if (activeVoyage.captain && activeVoyage.fo && !activeVoyage.salesOpen && !activeVoyage.timerSet) {
+      activeVoyage.timerSet = true;
+      message.channel.send("⏳ GC missing. Sales will open in 24 hours if GC is not found.");
+      setTimeout(() => { if (activeVoyage && !activeVoyage.salesOpen) sendVoyageEmbed(client); }, 24 * 60 * 60 * 1000);
     }
   }
 
-  // !seat
   if (content.startsWith("!seat")) {
     if (!activeVoyage || !activeVoyage.salesOpen) return message.reply("❌ Sales not open yet.");
     if (user.seat) return message.reply(`❌ You already have a seat: ${user.seat}`);
@@ -99,7 +134,6 @@ client.on("messageCreate", async (message) => {
     return message.reply(`💺 Seat booked: ${seat} for $${price}.`);
   }
 
-  // !cancel
   if (content === "!cancel") {
     if (!user.seat) return message.reply("❌ Nothing to cancel.");
     delete data.seatMap[user.seat]; user.seat = null; user.balance += 40; saveData();
