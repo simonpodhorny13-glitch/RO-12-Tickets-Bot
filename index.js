@@ -1,4 +1,17 @@
-console.log("STARTUJI BOTA...");
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000; // Render si nastaví svůj port, nebo použije 3000
+
+app.get("/", (req, res) => {
+  res.send("Bot je online a vše funguje!");
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Web server běží na portu ${PORT}`);
+});
+
+// Rest of code:
+client.login(process.env.TOKEN);
 const { Client, GatewayIntentBits } = require("discord.js");
 const fs = require("fs");
 const express = require("express");
