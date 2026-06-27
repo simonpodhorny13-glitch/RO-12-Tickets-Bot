@@ -73,25 +73,37 @@ client.on("messageCreate", async (message) => {
 
   const hasPermission = message.member?.roles.cache.some(r => ["Owner", "Admin", "Captain"].includes(r.name));
 
+  if (content === "!balance") return message.reply(`💰 Your balance: $${user.balance}`);
+
+  if (content === "!map cabins") {
+    const isTaken = (id) => data.cabinMap[id] ? "[X]" : "[ ]";
+    const mapMsg = `🛏️ **CABINS**\n\n**ECONOMY**\n1A ${isTaken("1A")}\n1B ${isTaken("1B")}\n2A ${isTaken("2A")}\n2B ${isTaken("2B")}\n\n**FIRST**\n1C ${isTaken("1C")}\n1D ${isTaken("1D")}\n2C ${isTaken("2C")}\n2D ${isTaken("2D")}\n\n**DOUBLE**\n3A ${isTaken("3A")}\n3B ${isTaken("3B")}\n3C ${isTaken("3C")}\n3D ${isTaken("3D")}`;
+    return message.channel.send(mapMsg);
+  }
+
+  if (content.startsWith("!bookcabin")) {
+    const cabin = content.split(" ")[1];
+    if (!cabin) return message.reply("❌ Use: !bookcabin 1A");
+    if (data.cabinMap[cabin]) return message.reply("❌ This cabin is taken.");
+    const isFirstClass = ["1C", "1D", "2C", "2D"].includes(cabin);
+    const price = isFirstClass ? (50 * 3) : 50;
+    if (user.balance < price) return message.reply(`❌ Not enough money! (Price: $${price})`);
+    user.balance -= price; data.cabinMap[cabin] = message.author.id; user.cabin = cabin; saveData();
+    return message.reply(`🛏️ Cabin ${cabin} booked for $${price}!`);
+  }
+
   if (content.startsWith("!cancelvoyage")) {
     if (!hasPermission) return message.reply("❌ You don't have permission to cancel voyages.");
     if (!activeVoyage) return message.reply("❌ No active voyage to cancel.");
-    
     const reason = content.split("!cancelvoyage ")[1] || "No reason provided.";
     const chVoyages = client.channels.cache.find(c => c.name === "voyages");
     const chStaff = client.channels.cache.find(c => c.name === "staff");
-    
     const cancelMsg = `🚫 VOYAGE CANCELLED\nReason: ${reason}`;
     if (chVoyages) chVoyages.send(cancelMsg);
     if (chStaff) chStaff.send(cancelMsg);
-    
     activeVoyage = null;
-    data.seatMap = {};
-    data.cabinMap = {};
-    for (let id in data.users) {
-        data.users[id].seat = null;
-        data.users[id].cabin = null;
-    }
+    data.seatMap = {}; data.cabinMap = {};
+    for (let id in data.users) { data.users[id].seat = null; data.users[id].cabin = null; }
     saveData();
     return;
   }
@@ -112,7 +124,6 @@ client.on("messageCreate", async (message) => {
     else if (role === "gc") activeVoyage.gc = message.author.username;
     else return;
     message.reply(`${role} claimed.`);
-
     if (activeVoyage.captain && activeVoyage.fo && activeVoyage.gc && !activeVoyage.salesOpen) {
       sendVoyageEmbed(client);
     } else if (activeVoyage.captain && activeVoyage.fo && !activeVoyage.salesOpen && !activeVoyage.timerSet) {
@@ -133,36 +144,22 @@ client.on("messageCreate", async (message) => {
     user.balance -= price; data.seatMap[seat] = message.author.id; user.seat = seat; saveData();
     return message.reply(`💺 Seat booked: ${seat} for $${price}.`);
   }
-if (content === "!map cabins") {
-    const isTaken = (id) => data.cabinMap[id] ? "[X]" : "[ ]";
-    
-    const mapMsg = `
-🛏️ **CABINS**
 
-**ECONOMY**
-1A ${isTaken("1A")}
-1B ${isTaken("1B")}
-2A ${isTaken("2A")}
-2B ${isTaken("2B")}
-
-**FIRST**
-1C ${isTaken("1C")}
-1D ${isTaken("1D")}
-2C ${isTaken("2C")}
-2D ${isTaken("2D")}
-
-**DOUBLE**
-3A ${isTaken("3A")}
-3B ${isTaken("3B")}
-3C ${isTaken("3C")}
-3D ${isTaken("3D")}`;
-
-    return message.channel.send(mapMsg);
-}
   if (content === "!cancel") {
-    if (!user.seat) return message.reply("❌ Nothing to cancel.");
-    delete data.seatMap[user.seat]; user.seat = null; user.balance += 40; saveData();
-    return message.reply("✅ Booking cancelled. ($40 refunded)");
+    if (!user.seat && !user.cabin) return message.reply("❌ Nothing to cancel.");
+    let refund = 0;
+    if (user.seat) { 
+        refund += Math.floor((50 * activeVoyage.multiplier) * 0.9);
+        delete data.seatMap[user.seat]; user.seat = null; 
+    }
+    if (user.cabin) { 
+        const price = ["1C", "1D", "2C", "2D"].includes(user.cabin) ? 150 : 50;
+        refund += Math.floor(price * 0.9);
+        delete data.cabinMap[user.cabin]; user.cabin = null; 
+    }
+    user.balance += refund;
+    saveData();
+    return message.reply(`✅ Booking cancelled. Refund: $${refund} (90% of price)`);
   }
 });
 
