@@ -1,3 +1,4 @@
+console.log("STARTUJI BOTA...");
 const { Client, GatewayIntentBits } = require("discord.js");
 const fs = require("fs");
 const express = require("express");
