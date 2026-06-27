@@ -28,18 +28,28 @@ const TOKEN = process.env.TOKEN;
 // ---------------- DATA ----------------
 function loadData() {
   try {
-    return JSON.parse(fs.readFileSync("data.json", "utf8"));
-  } catch {
+    if (!fs.existsSync("data.json")) {
+      return { users: {}, seatMap: {}, cabinMap: {} };
+    }
+    const raw = fs.readFileSync("data.json", "utf8");
+    const parsed = JSON.parse(raw);
     return {
-      users: {},
-      seatMap: {},
-      cabinMap: {}
+      users: parsed.users || {},
+      seatMap: parsed.seatMap || {},
+      cabinMap: parsed.cabinMap || {}
     };
+  } catch (e) {
+    console.error("Error loading data, initializing empty structure:", e);
+    return { users: {}, seatMap: {}, cabinMap: {} };
   }
 }
 
 function saveData() {
-  fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
+  try {
+    fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error("Error saving data:", e);
+  }
 }
 
 let data = loadData();
@@ -149,7 +159,11 @@ client.on("messageCreate", (message) => {
   // ---------------- SET VOYAGE ----------------
   if (content.startsWith("!setvoyage")) {
     if (channel !== "staff") return;
-    const [, from, to, length] = content.split(" ");
+    const args = content.split(" ");
+    const from = args[1];
+    const to = args[2];
+    const length = args[3];
+
     activeVoyage = {
       id: voyageId++,
       from,
