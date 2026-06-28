@@ -2,33 +2,71 @@ const fs = require("fs");
 
 module.exports = {
   name: "ticket",
+  description: "View your ticket for a voyage",
 
-  execute(message) {
-    const filePath = "./data.json";
-    const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  async execute(interaction) {
+    const voyageId = interaction.options.getString("voyage");
 
-    const userId = message.author.id;
-    const user = data.users[userId];
+    const data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
+    const userId = interaction.user.id;
 
-    if (!user) {
-      return message.reply("❌ You don't have a ticket yet.\nUse !bookcabin and !bookseat to get started 🚢");
+    const voyage = data.voyages[voyageId];
+
+    if (!voyage) {
+      return interaction.reply({
+        content: "❌ Voyage not found.",
+        ephemeral: true
+      });
     }
 
-    const cabin = user.cabin || "Not booked";
-    const seat = user.seat || "Not booked";
+    const user = data.users[userId];
 
-    // find if cabin/seat still valid in maps (extra safety)
-    const cabinStatus = data.cabinMap[cabin] === userId ? "Confirmed" : "Invalid";
-    const seatStatus = data.seatMap[seat] === userId ? "Confirmed" : "Invalid";
+    if (!user || !user.bookings || !user.bookings[voyageId]) {
+      return interaction.reply({
+        content: "❌ You don't have a ticket for this voyage.",
+        ephemeral: true
+      });
+    }
 
-    message.reply(`
-🎟️ **RO-12 BOARDING TICKET**
+    const b = user.bookings[voyageId];
 
-👤 Passenger: ${message.author.username}
-🛏️ Cabin: ${cabin} (${cabinStatus})
-💺 Seat: ${seat} (${seatStatus})
+    const status = voyage.cancelled
+      ? "❌ Cancelled"
+      : voyage.salesOpen
+      ? "🟢 Active"
+      : "🟡 Pending";
 
-🌊 Status: Ready for boarding 🚢
-`);
+    const typeLabel = b.type === "cabin" ? "🏨 Cabin" : "💺 Seat";
+
+    const message =
+`🎟️ YOUR TICKET
+
+Voyage ID
+${voyageId}
+
+From
+${voyage.from}
+
+To
+${voyage.to}
+
+Ship
+${voyage.ship}
+
+Departing
+${voyage.date}, ${voyage.time}
+
+Status
+${status}
+
+Booking
+${typeLabel}: ${b.location}
+
+💰 Paid: $${b.paid}`;
+
+    interaction.reply({
+      content: message,
+      ephemeral: true
+    });
   }
 };
