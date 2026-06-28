@@ -38,7 +38,7 @@ module.exports = {
     else if (voyage.boarding) status = "🟠 Boarding";
     else if (voyage.salesOpen) status = "🟢 Active";
 
-    const typeLabel = b.type === "cabin" ? "🏨 Cabin" : "💺 Seat";
+    const typeLabel = b.type === "cabin" ? "🛏️ Cabin" : "💺 Seat";
 
     const embed = new EmbedBuilder()
       .setColor(voyage.cancelled ? 0xff3b3b : 0x2ecc71)
