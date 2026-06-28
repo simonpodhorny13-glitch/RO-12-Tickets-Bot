@@ -1,58 +1,93 @@
 const fs = require("fs");
 
 module.exports = {
-  name: "bookcabin",
+  name: "book",
+  description: "Book a cabin or seat for a voyage",
 
-  execute(message, args) {
-    const cabin = args[0];
+  async execute(interaction) {
+    const type = interaction.options.getString("type"); // cabin
+    const location = interaction.options.getString("location"); // 1A
+    const voyageId = interaction.options.getString("voyage"); // 0001
+
     const filePath = "./data.json";
-
-    if (!cabin) {
-      return message.reply("❌ Usage: !bookcabin 1A");
-    }
-
     const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
-    const userId = message.author.id;
+    const userId = interaction.user.id;
+
+    const voyage = data.voyages[voyageId];
+
+    if (!voyage) {
+      return interaction.reply({ content: "❌ Voyage not found.", ephemeral: true });
+    }
+
+    if (!voyage.salesOpen) {
+      return interaction.reply({ content: "❌ Sales are not open for this voyage.", ephemeral: true });
+    }
+
+    if (voyage.cancelled) {
+      return interaction.reply({ content: "❌ This voyage is cancelled.", ephemeral: true });
+    }
 
     if (!data.users[userId]) {
-      data.users[userId] = { balance: 0, spent: 0 };
+      data.users[userId] = {
+        balance: 0,
+        bookings: {}
+      };
     }
 
-    if (data.users[userId].cabin) {
-      return message.reply("❌ You already have a cabin!");
+    const user = data.users[userId];
+
+    if (!user.bookings) user.bookings = {};
+
+    if (user.bookings[voyageId]) {
+      return interaction.reply({ content: "❌ You already booked for this voyage.", ephemeral: true });
     }
 
-    if (data.cabinMap[cabin]) {
-      return message.reply("❌ That cabin is already taken!");
+    // check if cabin taken
+    if (voyage.cabinMap[location]) {
+      return interaction.reply({ content: "❌ This cabin is already taken.", ephemeral: true });
     }
 
-    const voyageType = data.voyage?.type || "short";
-    let price = 50;
+    // pricing system
+    let price = 50; // economy base
 
-    // cabin class pricing
-    if (["1C", "1D", "2C", "2D"].includes(cabin)) price = 150;
-    if (["3A", "3B", "3C", "3D"].includes(cabin)) price = 120;
+    // first class cabins
+    if (["1C", "1D", "2C", "2D"].includes(location)) {
+      price = 150;
+    }
 
-    // multipliers
-    if (voyageType === "medium") price *= 1.5;
-    if (voyageType === "long") price *= 2;
+    // double economy
+    if (["3A", "3B", "3C", "3D"].includes(location)) {
+      price = 120;
+    }
+
+    // voyage multiplier
+    if (voyage.length === 2) price *= 1.5;
+    if (voyage.length === 3) price *= 2;
 
     // balance check
-    if (data.users[userId].balance < price) {
-      return message.reply("❌ Not enough balance!");
+    if (user.balance < price) {
+      return interaction.reply({ content: "❌ Not enough balance.", ephemeral: true });
     }
 
-    // deduct
-    data.users[userId].balance -= price;
-    data.users[userId].spent += price;
+    // deduct money
+    user.balance -= price;
 
-    // assign
-    data.users[userId].cabin = cabin;
-    data.cabinMap[cabin] = userId;
+    // store booking (IMPORTANT for cancel system)
+    user.bookings[voyageId] = {
+      type: "cabin",
+      location,
+      paid: price
+    };
+
+    // assign cabin
+    voyage.cabinMap[location] = userId;
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 
-    message.reply(`🛏️ Cabin ${cabin} booked! 💰-${price}`);
+    return interaction.reply({
+      content: `🛏️ Cabin ${location} booked for voyage ${voyageId}\n💰 Paid: $${price}`,
+      ephemeral: true
+    });
   }
 };
