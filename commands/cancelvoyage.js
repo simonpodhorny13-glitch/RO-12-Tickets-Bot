@@ -4,8 +4,7 @@ module.exports = {
   name: "cancelvoyage",
 
   execute(message, args) {
-    const filePath = "./data.json";
-    const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    const data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
 
     const voyageId = args[0];
     const reason = args.slice(1).join(" ") || "No reason provided";
@@ -14,60 +13,53 @@ module.exports = {
       return message.reply("❌ Usage: !cancelvoyage <voyageId|all> [reason]");
     }
 
-    // Helper: refund function
     const refundUser = (user, paid) => {
       const refund = paid * 0.9;
       user.balance = (user.balance || 0) + refund;
     };
 
     // =========================
-    // ❌ CANCEL ALL VOYAGES
+    // 🚫 CANCEL ALL
     // =========================
     if (voyageId.toLowerCase() === "all") {
-      const voyages = data.voyages;
 
-      let cancelledAny = false;
+      let found = false;
 
-      for (const id in voyages) {
-        const voyage = voyages[id];
-        if (!voyage || voyage.cancelled) continue;
+      for (const id in data.voyages) {
+        const v = data.voyages[id];
+        if (!v || v.cancelled) continue;
 
-        voyage.salesOpen = false;
-        voyage.cancelled = true;
+        v.salesOpen = false;
+        v.cancelled = true;
 
-        // refund all users
-        for (const userId in data.users) {
-          const user = data.users[userId];
+        for (const uid in data.users) {
+          const user = data.users[uid];
 
           if (user.bookings && user.bookings[id]) {
-            const booking = user.bookings[id];
-            refundUser(user, booking.paid);
-
+            refundUser(user, user.bookings[id].paid);
             delete user.bookings[id];
           }
         }
 
-        cancelledAny = true;
+        found = true;
       }
 
-      if (!cancelledAny) {
+      if (!found) {
         return message.reply("❌ No active voyages to cancel.");
       }
 
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+      fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
 
-      message.channel.send(
+      return message.channel.send(
 `🚫 ALL VOYAGES CANCELLED
 
 Reason
 ${reason}`
       );
-
-      return;
     }
 
     // =========================
-    // ❌ CANCEL SINGLE VOYAGE
+    // 🚫 CANCEL SINGLE VOYAGE
     // =========================
     const voyage = data.voyages[voyageId];
 
@@ -78,19 +70,17 @@ ${reason}`
     voyage.salesOpen = false;
     voyage.cancelled = true;
 
-    // refund only this voyage
-    for (const userId in data.users) {
-      const user = data.users[userId];
+    // refund passengers
+    for (const uid in data.users) {
+      const user = data.users[uid];
 
       if (user.bookings && user.bookings[voyageId]) {
-        const booking = user.bookings[voyageId];
-        refundUser(user, booking.paid);
-
+        refundUser(user, user.bookings[voyageId].paid);
         delete user.bookings[voyageId];
       }
     }
 
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
 
     message.channel.send(
 `🚫 VOYAGE CANCELLED
