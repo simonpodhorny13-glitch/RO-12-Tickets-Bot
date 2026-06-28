@@ -13,26 +13,38 @@ module.exports = {
 
     const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
-    // check if seat exists already
-    if (data.seatMap[seat]) {
-      return message.reply("❌ That seat is already taken!");
-    }
-
     const userId = message.author.id;
 
-    // prevent double seat booking
-    if (data.users[userId]?.seat) {
-      return message.reply("❌ You already booked a seat!");
+    if (!data.users[userId]) {
+      data.users[userId] = { balance: 0, spent: 0 };
     }
 
-    // save seat ownership
-    data.seatMap[seat] = userId;
+    if (data.users[userId].seat) {
+      return message.reply("❌ You already have a seat!");
+    }
 
-    if (!data.users[userId]) data.users[userId] = {};
+    if (data.seatMap[seat]) {
+      return message.reply("❌ That seat is taken!");
+    }
+
+    const voyageType = data.voyage?.type || "short";
+    let price = 40;
+
+    if (voyageType === "medium") price *= 1.5;
+    if (voyageType === "long") price *= 2;
+
+    if (data.users[userId].balance < price) {
+      return message.reply("❌ Not enough balance!");
+    }
+
+    data.users[userId].balance -= price;
+    data.users[userId].spent += price;
+
     data.users[userId].seat = seat;
+    data.seatMap[seat] = userId;
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 
-    message.reply(`💺 Seat **${seat}** booked successfully! 🚢`);
+    message.reply(`💺 Seat ${seat} booked! 💰-${price}`);
   }
 };
