@@ -1,30 +1,38 @@
 const fs = require("fs");
 
 module.exports = {
-  name: "bookcabin",
+  name: "bookseat",
 
   execute(message, args) {
-    const cabin = args[0];
+    const seat = args[0];
+    const filePath = "./data.json";
 
-    if (!cabin) {
-      return message.reply("❌ Usage: !bookcabin 1A");
+    if (!seat) {
+      return message.reply("❌ Usage: !bookseat 12C");
     }
 
-    const filePath = "./cabins.json";
+    const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
-    let data = {};
-    if (fs.existsSync(filePath)) {
-      data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    // check if seat exists already
+    if (data.seatMap[seat]) {
+      return message.reply("❌ That seat is already taken!");
     }
 
-    if (data[cabin]) {
-      return message.reply("❌ That cabin is already booked!");
+    const userId = message.author.id;
+
+    // prevent double seat booking
+    if (data.users[userId]?.seat) {
+      return message.reply("❌ You already booked a seat!");
     }
 
-    data[cabin] = true;
+    // save seat ownership
+    data.seatMap[seat] = userId;
+
+    if (!data.users[userId]) data.users[userId] = {};
+    data.users[userId].seat = seat;
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 
-    message.reply(`✅ Cabin ${cabin} booked successfully! 🚢`);
+    message.reply(`💺 Seat **${seat}** booked successfully! 🚢`);
   }
 };
