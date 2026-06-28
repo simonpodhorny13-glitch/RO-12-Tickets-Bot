@@ -179,7 +179,11 @@ client.on("messageCreate", async (message) => {
   /* ---------------- SET VOYAGE ---------------- */
 
   if (content.startsWith("!setvoyage")) {
-    if (channel !== "staff") return;
+    const isHighStaff = message.member.roles.cache.some(r =>
+  ["Owner", "Admin", "Captain"].includes(r.name)
+);
+
+if (channel !== "staff" || !isHighStaff) return;
 
     const parts = content.split(" ");
     const from = parts[1];
