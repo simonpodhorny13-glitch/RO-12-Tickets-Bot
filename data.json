@@ -5,12 +5,7 @@
   "settings": {
     "monthlyPayout": 250,
     "dailyReward": 20,
-    "refundPercent": 90
+    "refundPercent": 90,
+    "nextVoyageId": 1
   }
-}
-"settings": {
-  "monthlyPayout": 250,
-  "dailyReward": 20,
-  "refundPercent": 90,
-  "nextVoyageId": 1
 }
