@@ -1,5 +1,16 @@
 const fs = require("fs");
-const { EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName("ticket")
+    .setDescription("View your RO-12 ticket")
+    .addStringOption(option =>
+      option
+        .setName("voyage")
+        .setDescription("Voyage ID")
+        .setRequired(true)
+    ),
 
 module.exports = {
   name: "ticket",
