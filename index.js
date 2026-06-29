@@ -332,28 +332,26 @@ setInterval(async () => {
     }
 
     // AUTO SALES OPEN
-    if (v.gcDeadline && Date.now() >= v.gcDeadline) {
-      v.salesOpen = true;
-      delete v.gcDeadline;
+let channel;
 
-      try {
-        const channel = await client.channels.fetch(VOYAGES_CHANNEL_ID);
+try {
+  channel = await client.channels.fetch(VOYAGES_CHANNEL_ID);
+} catch (err) {
+  console.error("❌ Cannot fetch voyages channel:", err);
+}
 
-        if (channel) {
-          await channel.send(
-            `🚢 **SALES OPENED**\n` +
-            `Voyage ${id}\n` +
-            `${v.from} → ${v.to}\n\n` +
-            `🧳 You can now book cabins and seats!`
-          );
-        }
-      } catch (err) {
-        console.error("❌ Failed to send voyages message:", err);
-      }
-
-      console.log(`🚢 AUTO SALES OPENED: ${id}`);
-      changed = true;
-    }
+if (channel) {
+  try {
+    await channel.send(
+      `🚢 **SALES OPENED**\n` +
+      `Voyage ${id}\n` +
+      `${v.from} → ${v.to}\n\n` +
+      `🧳 You can now book cabins and seats!`
+    );
+  } catch (err) {
+    console.error("❌ Cannot send message:", err);
+  }
+}
   }
 
   if (changed) saveData();
