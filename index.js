@@ -308,33 +308,52 @@ client.on("messageCreate", async (message) => {
 
 /* ---------------- AUTO ENGINE ---------------- */
 
-setInterval(() => {
+setInterval(async () => {
   let changed = false;
 
   for (const id in voyages) {
     const v = voyages[id];
-
     if (!v || v.cancelled || v.salesOpen) continue;
 
     const crew = v.crew;
-
     if (!crew.captain || !crew.fo) continue;
 
+    // GC missing → start deadline
     if (!crew.gc && !v.gcDeadline) {
-        v.gcDeadline = Date.now() + 24 * 60 * 60 * 1000;
+      v.gcDeadline = Date.now() + 24 * 60 * 60 * 1000;
 
-      changed = true;
+      console.log(`⏳ GC deadline started for voyage ${id}`);
+    }
+
+    // GC claimed before deadline → cancel timer
+    if (crew.gc && v.gcDeadline) {
+      delete v.gcDeadline;
+    }
+
+    // AUTO SALES OPEN
+    if (v.gcDeadline && Date.now() >= v.gcDeadline) {
+      v.salesOpen = true;
+      delete v.gcDeadline;
+
+      try {
+        const channel = await client.channels.fetch(VOYAGES_CHANNEL_ID);
+
+        if (channel) {
+          await channel.send(
+            `🚢 **SALES OPENED**\n` +
+            `Voyage ${id}\n` +
+            `${v.from} → ${v.to}\n\n` +
+            `🧳 You can now book cabins and seats!`
+          );
+        }
+      } catch (err) {
+        console.error("❌ Failed to send voyages message:", err);
+      }
+
       console.log(`🚢 AUTO SALES OPENED: ${id}`);
+      changed = true;
     }
   }
 
   if (changed) saveData();
 }, 60 * 1000);
-
-/* ---------------- LOGIN ---------------- */
-
-client.once("ready", () => {
-  console.log(`Logged in as ${client.user.tag}`);
-});
-
-client.login(TOKEN);
