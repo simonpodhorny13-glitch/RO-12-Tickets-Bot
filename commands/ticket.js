@@ -12,16 +12,13 @@ module.exports = {
         .setRequired(true)
     ),
 
-module.exports = {
-  name: "ticket",
-  description: "View your RO-12 ticket",
-
   async execute(interaction) {
     const voyageId = interaction.options.getString("voyage");
+
     const data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
     const userId = interaction.user.id;
 
-    const voyage = data.voyages[voyageId];
+    const voyage = data.voyages?.[voyageId];
 
     if (!voyage) {
       return interaction.reply({
@@ -30,7 +27,7 @@ module.exports = {
       });
     }
 
-    // 🔍 find booking from current system
+    // 🔍 find booking
     let bookingType = null;
     let bookingLocation = null;
 
