@@ -8,7 +8,7 @@ const VOYAGES_CHANNEL_ID = "1519404986079903854";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => res.send("RO-12 bot is alive"));
+app.get("/", (req, res) => res.send("RO-12 bot is live"));
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`Server running on port ${PORT}`)
 );
@@ -29,6 +29,12 @@ const TOKEN = process.env.TOKEN;
 /* ---------------- DATA ---------------- */
 
 let data = loadData();
+let voyages = data.voyages || {};
+let voyageIdCounter = data.voyageIdCounter || 1;
+
+// safety sync
+data.voyages = voyages;
+data.voyageIdCounter = voyageIdCounter;
 
 /* MULTI VOYAGE STORAGE */
 let voyages = data.voyages || {};
@@ -60,6 +66,7 @@ function loadData() {
 }
 
 function saveData() {
+  data.users = data.users || {};
   data.voyages = voyages;
   data.voyageIdCounter = voyageIdCounter;
 
@@ -99,16 +106,20 @@ function getBasePrice(multiplier = 1) {
 
 /* ---------------- COMMAND SYSTEM ---------------- */
 
+const path = require("path");
+
 const commands = new Collection();
 
 try {
-  const commandFiles = fs.readdirSync("./commands");
+  const commandPath = path.join(__dirname, "commands");
+  const commandFiles = fs.readdirSync(commandPath);
+
   for (const file of commandFiles) {
-    const cmd = require(`./commands/${file}`);
+    const cmd = require(path.join(commandPath, file));
     commands.set(cmd.name, cmd);
   }
 } catch (e) {
-  console.log("No commands folder or error loading commands");
+  console.log("No commands folder or error loading commands", e);
 }
 
 /* ---------------- SLASH COMMANDS ---------------- */
@@ -176,7 +187,8 @@ client.on("messageCreate", async (message) => {
 
     const route = getRouteData(routeCode);
 
-    const id = String(voyageIdCounter++);
+    const id = String(data.voyageIdCounter++);
+voyageIdCounter = data.voyageIdCounter;
 
     voyages[id] = {
       id,
@@ -203,87 +215,93 @@ client.on("messageCreate", async (message) => {
 
   /* ---------------- CLAIM ---------------- */
   if (content.startsWith("!claim")) {
-    const parts = content.split(" ");
-    const role = parts[1];
-    const id = parts[2];
+  const parts = content.split(" ");
+  const role = parts[1];
+  const id = parts[2];
 
-    const v = voyages[id];
-    if (!v) return message.reply("❌ Voyage not found.");
+  const v = voyages[id];
+  if (!v) return message.reply("❌ Voyage not found.");
 
-    const roles = message.member?.roles.cache;
+  const roles = message.member?.roles.cache;
 
-    if (!["captain", "fo", "gc"].includes(role))
-      return message.reply("❌ Invalid role.");
+  if (!["captain", "fo", "gc"].includes(role))
+    return message.reply("❌ Invalid role.");
 
-    if (v.crew[role])
-      return message.reply("❌ Already claimed.");
+  if (v.crew[role])
+    return message.reply("❌ Already claimed.");
 
-    if (role === "captain" && !roles.some(r => r.name === "Captain"))
-      return message.reply("❌ Not Captain.");
+  const hasRole = (name) =>
+    roles.some(r => r.name === name);
 
-    if (role === "fo" && !roles.some(r => r.name === "First Officer"))
-      return message.reply("❌ Not FO.");
+  if (role === "captain" && !hasRole("Captain"))
+    return message.reply("❌ Not Captain.");
 
-    if (role === "gc" && !roles.some(r => r.name === "Ground Crew"))
-      return message.reply("❌ Not GC.");
+  if (role === "fo" && !hasRole("First Officer"))
+    return message.reply("❌ Not FO.");
 
-    v.crew[role] = message.author.id;
+  if (role === "gc" && !hasRole("Ground Crew"))
+    return message.reply("❌ Not GC.");
 
-    const crew = v.crew;
+  v.crew[role] = message.author.id;
 
-    if (crew.captain && crew.fo) {
+  saveData();
 
-      if (!crew.gc && !v.gcDeadline) {
-        v.gcDeadline = Date.now() + 24 * 60 * 60 * 1000;
+  const crew = v.crew;
 
-        message.channel.send(
-          `⏳ Ground Crew unclaimed.\nSales open in 24h if not claimed.`
-        );
-      }
+  if (crew.captain && crew.fo) {
+    if (!crew.gc && !v.gcDeadline) {
+      v.gcDeadline = Date.now() + 24 * 60 * 60 * 1000;
 
-      if (crew.gc && v.gcDeadline) {
-        delete v.gcDeadline;
-      }
-
-      if (crew.gc && !v.salesOpen) {
-        v.salesOpen = true;
-        message.channel.send(`🚢 SALES OPEN (Voyage ${id})`);
-      }
+      message.channel.send(
+        `⏳ Ground Crew unclaimed.\nSales open in 24h if not claimed.`
+      );
     }
 
-    saveData();
-    return message.reply(`✅ ${role} claimed.`);
-  }
-
-  /* ---------------- BOOKING ---------------- */
-  if (content.startsWith("!bookcabin") || content.startsWith("!seat")) {
-    const isCabin = content.startsWith("!bookcabin");
-    const target = content.split(" ")[1];
-
-    const v = Object.values(voyages).find(x => x.salesOpen && !x.cancelled);
-    if (!v) return message.reply("❌ No active voyage.");
-
-    const price = getBasePrice(v.multiplier);
-
-    if (isCabin) {
-      if (data.cabinMap[target]) return message.reply("❌ Taken.");
-
-      user.balance -= price;
-      data.cabinMap[target] = message.author.id;
-      user.cabin = target;
-    } else {
-      if (!isValidSeat(target) || data.seatMap[target])
-        return message.reply("❌ Invalid/taken.");
-
-      user.balance -= price;
-      data.seatMap[target] = message.author.id;
-      user.seat = target;
+    if (crew.gc && v.gcDeadline) {
+      delete v.gcDeadline;
     }
 
-    saveData();
-    return message.reply(`✅ Booked ${target}`);
+    if (crew.gc && !v.salesOpen) {
+      v.salesOpen = true;
+      message.channel.send(`🚢 SALES OPEN (Voyage ${id})`);
+    }
   }
 
+  saveData();
+  return message.reply(`✅ ${role} claimed.`);
+  }
+  
+/* ---------------- BOOKING ---------------- */
+if (content.startsWith("!bookcabin") || content.startsWith("!seat")) {
+  const isCabin = content.startsWith("!bookcabin");
+  const target = content.split(" ")[1];
+
+  const v = Object.values(voyages).find(x => x.salesOpen && !x.cancelled);
+  if (!v) return message.reply("❌ No active voyage.");
+
+  if (!target) return message.reply("❌ Missing cabin/seat.");
+
+  const price = getBasePrice(v.multiplier);
+
+  if (isCabin) {
+    if (v.cabinMap[target]) return message.reply("❌ Taken.");
+
+    user.balance -= price;
+    v.cabinMap[target] = message.author.id;
+    user.cabin = target;
+  } else {
+    if (!isValidSeat(target) || v.seatMap[target])
+      return message.reply("❌ Invalid/taken.");
+
+    user.balance -= price;
+    v.seatMap[target] = message.author.id;
+    user.seat = target;
+  }
+
+  saveData();
+  return message.reply(`✅ Booked ${target}`);
+}
+  
   /* ---------------- CANCEL ---------------- */
   if (content === "!cancel") {
     let refund = 0;
