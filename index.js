@@ -5,6 +5,7 @@ const express = require("express");
 
 const VOYAGES_CHANNEL_ID = "1519404986079903854";
 const BOTS_CHANNEL_ID = "1518998081713213520";
+const STAFF_CHANNEL_ID = "1519551586999730236";
 
 /* ---------------- ROLE SALARIES ---------------- */
 
@@ -137,6 +138,16 @@ client.on("messageCreate", async (message) => {
 
   const content = message.content;
   const user = getUser(message.author.id);
+
+  // STAFF-ONLY COMMAND LOCK
+  if (
+    (content.startsWith("!setvoyage") ||
+     content.startsWith("!claim") ||
+     content.startsWith("!cancelvoyage")) &&
+    message.channel.id !== STAFF_CHANNEL_ID
+  ) {
+    return message.reply("❌ Use #staff channel for this command.");
+  }
 
   if (content === "!balance") {
     return message.reply(`💰 Your balance: $${user.balance}`);
