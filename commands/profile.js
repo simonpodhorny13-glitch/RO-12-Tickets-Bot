@@ -16,7 +16,7 @@ module.exports = {
 
   async execute(interaction, { data, voyages }) {
     const userId = interaction.user.id;
-    const user = data.users?.[userId];
+    const user = getUser(userId);
 
     if (!user) {
       return interaction.reply({
