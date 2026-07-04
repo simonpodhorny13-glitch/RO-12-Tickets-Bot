@@ -1,7 +1,7 @@
 {
   "users": {},
   "voyages": {},
-  "claims": {},
+  "transactions": {},
   "settings": {
     "monthlyPayout": 250,
     "dailyReward": 20,
