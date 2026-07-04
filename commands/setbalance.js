@@ -20,8 +20,8 @@ module.exports = {
         .setMinValue(0)
     ),
 
-  async execute(interaction, { getUser }) {
-    // Owner role check
+  async execute(interaction, { getUser, data, saveData }) {
+
     if (!interaction.member.roles.cache.has(OWNER_ROLE_ID)) {
       return interaction.reply({
         content: "❌ Only the server owner can use this command.",
@@ -33,7 +33,22 @@ module.exports = {
     const newBalance = interaction.options.getInteger("balance");
 
     const userData = getUser(target.id);
+
+    const oldBalance = userData.balance;
+
     userData.balance = newBalance;
+
+    // 🧾 LOG TRANSACTION (IMPORTANT)
+    data.transactions.push({
+      type: "setbalance",
+      userId: target.id,
+      oldBalance,
+      newBalance,
+      performedBy: interaction.user.id,
+      timestamp: new Date().toISOString()
+    });
+
+    await saveData();
 
     return interaction.reply({
       content: `✅ Set **${target.username}**'s balance to **$${newBalance.toLocaleString()}**.`,
