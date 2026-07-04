@@ -9,7 +9,7 @@ module.exports = {
     const user = getUser(interaction.user.id);
 
     return interaction.reply({
-      content: `💰 Your balance: ${user.balance}`,
+      content: `💰 Your balance: $${user.balance}`,
       ephemeral: true
     });
   }
