@@ -102,13 +102,12 @@ module.exports = {
       });
     }
 
-    // 🎲 Message system
+        // 🎲 Message system
     let message = `🎁 Gift sent to ${target.username}.`;
-    const roll = Math.random();
 
-    // 💸 $1–$5 roast (10% chance)
+    // 💸 $1–$5 roast (10% chance) - voláno přímo v podmínce
     if (amount >= 1 && amount <= 5) {
-      if (roll < 0.10) {
+      if (Math.random() < 0.10) {
         message = `🎁 Tip sent to ${target.username}. I don't think you really helped them. 😭`;
       }
     }
@@ -118,15 +117,14 @@ module.exports = {
       message = `🎁 Gift sent to ${target.username}. You couldn't send a whole 100, could you? 😏`;
     }
 
-    // 💰 max gift
+    // 💰 max gift (Can add more chances later using Math.random())
     else if (amount === 100000) {
       message = `🎁 Gift sent to ${target.username}. Can I have some? 😭`;
     }
 
     // 🏦 big donation
     else if (amount >= 50000) {
-      const treasuryDonation = Math.floor(amount * 0.05);
-      message = `🎁 Gift sent to ${target.username}. You also donated $${treasuryDonation} to the treasury, thanks! 🏦`;
+      message = `🎁 Gift sent to ${target.username}. Through your 5% bank fee, you also contributed a massive $${fee} to the ship's treasury! 🏦`;
     }
 
     // 🎁 Final response
@@ -137,5 +135,3 @@ module.exports = {
         `🏦 Fee: $${fee}`,
       ephemeral: true
     });
-  }
-};
