@@ -1,57 +1,40 @@
 const { SlashCommandBuilder } = require("discord.js");
 
-const OWNER_ROLE_ID = "1519408960803700948";
-
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("setbalance")
-    .setDescription("Set a user's balance (Owner only)")
+    .setDescription("Set a user's balance (admin only)")
     .addUserOption(option =>
-      option
-        .setName("user")
-        .setDescription("User to modify")
-        .setRequired(true)
+      option.setName("user").setDescription("Target user").setRequired(true)
     )
     .addIntegerOption(option =>
-      option
-        .setName("balance")
-        .setDescription("New balance")
-        .setRequired(true)
-        .setMinValue(0)
+      option.setName("amount").setDescription("New balance").setRequired(true)
     ),
 
-  async execute(interaction, { getUser, data, saveData }) {
+  async execute(interaction, { getUser }) {
+    const member = interaction.member;
 
-    if (!interaction.member.roles.cache.has(OWNER_ROLE_ID)) {
+    const allowed =
+      member.permissions?.has("Administrator") ||
+      member.roles?.cache?.some(r =>
+        ["1519406529495961873", "1519408960803700948"].includes(r.id)
+      );
+
+    if (!allowed) {
       return interaction.reply({
-        content: "❌ Only the server owner can use this command.",
+        content: "❌ No permission.",
         ephemeral: true
       });
     }
 
     const target = interaction.options.getUser("user");
-    const newBalance = interaction.options.getInteger("balance");
+    const amount = interaction.options.getInteger("amount");
 
-    const userData = getUser(target.id);
-
-    const oldBalance = userData.balance;
-
-    userData.balance = newBalance;
-
-    // 🧾 LOG TRANSACTION (IMPORTANT)
-    data.transactions.push({
-      type: "setbalance",
-      userId: target.id,
-      oldBalance,
-      newBalance,
-      performedBy: interaction.user.id,
-      timestamp: new Date().toISOString()
-    });
-
-    await saveData();
+    const user = getUser(target.id);
+    user.balance = amount;
 
     return interaction.reply({
-      content: `✅ Set **${target.username}**'s balance to **$${newBalance.toLocaleString()}**.`,
+      content: `✅ Set ${target.username}'s balance to $${amount}`,
       ephemeral: true
     });
   }
