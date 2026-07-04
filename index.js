@@ -118,7 +118,50 @@ client.on("messageCreate", async (message) => {
 
 // ===================== SLASH COMMAND HANDLER =====================
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+
+  // ================= SLASH COMMANDS =================
+  if (interaction.isChatInputCommand()) {
+    try {
+      const command = client.commands.get(interaction.commandName);
+
+      if (!command) {
+        return interaction.reply({
+          content: "❌ Command not found",
+          ephemeral: true
+        });
+      }
+
+      await command.execute(interaction, { data, voyages, getUser });
+
+    } catch (err) {
+      console.error(err);
+
+      if (!interaction.replied) {
+        await interaction.reply({
+          content: "❌ Error executing command",
+          ephemeral: true
+        });
+      }
+    }
+  }
+
+  // ================= BUTTONS (NEW FIX) =================
+  if (interaction.isButton()) {
+
+    // 🚢 Voyage help button
+    if (interaction.customId.startsWith("voyage_help_")) {
+      return interaction.reply({
+        content:
+          "🛳 **How to book a voyage:**\n\n" +
+          "1. Use `/bookseat` or `/bookcabin`\n" +
+          "2. Enter Voyage ID\n" +
+          "3. Choose your seat/cabin\n\n" +
+          "💡 Example: `/bookseat voyage:0001 seat:3A`",
+        ephemeral: true
+      });
+    }
+  }
+});
 
   try {
     const command = client.commands.get(interaction.commandName);
