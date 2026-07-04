@@ -1,52 +1,129 @@
-const { SlashCommandBuilder } = require("discord.js");
+const {
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
+} = require("discord.js");
 
-function formatTime(ms) {
+function formatDuration(ms) {
   const sec = Math.floor(ms / 1000);
   const min = Math.floor(sec / 60);
-  const hr = Math.floor(min / 60);
-  const days = Math.floor(hr / 24);
+  const hrs = Math.floor(min / 60);
+  const days = Math.floor(hrs / 24);
 
-  return `${days}d ${hr % 24}h ${min % 60}m`;
+  return `${days}d ${hrs % 24}h ${min % 60}m`;
+}
+
+function getPage1(user, member, data, userData) {
+  let roleName = "Passenger";
+
+  if (member) {
+    const roles = member.roles.cache
+      .filter(r => r.name !== "@everyone")
+      .sort((a, b) => b.position - a.position);
+
+    if (roles.first()) roleName = roles.first().name;
+  }
+
+  const activeBookings = data.voyages
+    ? Object.values(data.voyages).filter(v =>
+        v.bookings?.some(b => b.userId === user.id)
+      ).length
+    : 0;
+
+  return `👤 **User:** ${user.username}
+👨‍✈️ **Role:** ${roleName}
+🎟 **Active Bookings:** ${activeBookings}
+
+📄 Page 1/2`;
+}
+
+function getPage2(user, data, userData) {
+  const userTx = data.transactions.filter(t => t.userId === user.id);
+
+  const spent = userTx
+    .filter(t => t.amount < 0)
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+  const tickets = userTx.filter(t => t.type === "ticket_purchase").length;
+
+  const timeInServer = Date.now() - userData.joinedAt;
+
+  return `📊 **Stats for ${user.username}**
+
+💸 Total cash spent: $${spent.toLocaleString()}
+🎟 Tickets booked: ${tickets}
+⏱ In-server time: ${formatDuration(timeInServer)}
+
+📄 Page 2/2`;
 }
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("profile")
-    .setDescription("View your RO-12 profile"),
+    .setDescription("View your profile")
+    .addUserOption(option =>
+      option.setName("user").setDescription("User").setRequired(false)
+    ),
 
-  async execute(interaction, { data, voyages, getUser }) {
-    const user = getUser(interaction.user.id);
+  async execute(interaction, { data, getUser }) {
+    const user = interaction.options.getUser("user") || interaction.user;
+    const userData = getUser(user.id);
 
-    let recent = [];
+    if (!userData.joinedAt) userData.joinedAt = Date.now();
 
-    for (const [id, v] of Object.entries(voyages || {})) {
-      if (v.cabinMap?.[interaction.user.id]) {
-        recent.push(`🚢 Voyage #${id} → Cabin ${v.cabinMap[interaction.user.id]}`);
-      }
+    const member = interaction.guild.members.cache.get(user.id);
 
-      if (v.seatMap?.[interaction.user.id]) {
-        recent.push(`🚢 Voyage #${id} → Seat ${v.seatMap[interaction.user.id]}`);
-      }
-    }
+    let page = 1;
 
-    recent = recent.slice(-5);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("profile_prev")
+        .setLabel("⬅️")
+        .setStyle(ButtonStyle.Secondary),
 
-    return interaction.reply({
-      embeds: [
-        {
-          title: "🪪 RO-12 Profile",
-          color: 0x00aaff,
-          fields: [
-            { name: "👤 User", value: interaction.user.username, inline: true },
-            { name: "💰 Balance", value: `${user.balance}`, inline: true },
-            {
-              name: "🎫 Bookings",
-              value: recent.length ? recent.join("\n") : "None"
-            }
-          ]
-        }
-      ],
+      new ButtonBuilder()
+        .setCustomId("profile_next")
+        .setLabel("➡️")
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    const msg = await interaction.reply({
+      content: getPage1(user, member, data, userData),
+      components: [row],
       ephemeral: true
+    });
+
+    const collector = msg.createMessageComponentCollector({
+      time: 120000
+    });
+
+    collector.on("collect", async i => {
+      if (i.user.id !== user.id) {
+        return i.reply({
+          content: "❌ This profile isn’t yours to control.",
+          ephemeral: true
+        });
+      }
+
+      if (i.customId === "profile_next") page = 2;
+      if (i.customId === "profile_prev") page = 1;
+
+      const newContent =
+        page === 1
+          ? getPage1(user, member, data, userData)
+          : getPage2(user, data, userData);
+
+      await i.update({
+        content: newContent,
+        components: [row]
+      });
+    });
+
+    collector.on("end", async () => {
+      try {
+        await interaction.editReply({ components: [] });
+      } catch {}
     });
   }
 };
