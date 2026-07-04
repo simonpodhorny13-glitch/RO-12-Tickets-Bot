@@ -1,36 +1,48 @@
 const { SlashCommandBuilder } = require("discord.js");
 
-const DAY = 24 * 60 * 60 * 1000;
-
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("daily")
-    .setDescription("Claim your daily $20 reward"),
+    .setName("gift")
+    .setDescription("Send credits to another user")
+    .addUserOption(option =>
+      option
+        .setName("user")
+        .setDescription("User to gift money to")
+        .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName("amount")
+        .setDescription("Amount to send")
+        .setRequired(true)
+    ),
 
   async execute(interaction, { getUser }) {
-    const user = getUser(interaction.user.id);
+    const sender = getUser(interaction.user.id);
+    const target = interaction.options.getUser("user");
+    const amount = interaction.options.getInteger("amount");
 
-    const now = Date.now();
-    const last = user.lastDaily || 0;
-
-    if (now - last < DAY) {
-      const remaining = DAY - (now - last);
-      const hours = Math.floor(remaining / (1000 * 60 * 60));
-      const minutes = Math.floor((remaining / (1000 * 60)) % 60);
-
+    if (amount <= 0) {
       return interaction.reply({
-        content: `⏳ You already claimed your daily!\nCome back in **${hours}h ${minutes}m**.`,
+        content: "❌ Amount must be greater than 0.",
         ephemeral: true
       });
     }
 
-    const reward = 20;
+    if (sender.balance < amount) {
+      return interaction.reply({
+        content: "❌ You don’t have enough balance.",
+        ephemeral: true
+      });
+    }
 
-    user.balance = Number(user.balance || 0) + reward;
-    user.lastDaily = now;
+    const receiver = getUser(target.id);
+
+    sender.balance -= amount;
+    receiver.balance += amount;
 
     return interaction.reply({
-      content: `🎁 Daily claimed!\n💰 +$${reward}\n💳 New balance: $${user.balance}`,
+      content: `🎁 Sent $${amount} to ${target.username}!`,
       ephemeral: true
     });
   }
