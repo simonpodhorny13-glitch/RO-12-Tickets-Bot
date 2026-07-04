@@ -12,67 +12,71 @@ module.exports = {
 
   async execute(interaction, { data, voyages }) {
     const userId = interaction.user.id;
-    const user = data.users[userId];
+    const user = data.users?.[userId];
 
     if (!user) {
       return interaction.reply({
-        content: "❌ No profile found.",
+        content: "❓️ No profile found.",
         ephemeral: true
       });
     }
 
-    // ⏱️ time in server
-    const timeHere = formatTime(Date.now() - user.firstSeen);
+    user.balance = Number(user.balance || 0);
+    const firstSeen = user.firstSeen || Date.now();
 
-    // 🎫 recent bookings
+    const timeHere = formatTime(Date.now() - firstSeen);
+
     let recent = [];
 
-    for (const v of Object.values(voys = voyages)) {
+    for (const [voyageId, v] of Object.entries(voyages || {})) {
       if (v.cabinMap?.[userId]) {
-        recent.push(`🚢 Voyage #${v.id} → Cabin ${v.cabinMap[userId]}`);
+        recent.push(`🚢 Voyage #${voyageId} → Cabin ${v.cabinMap[userId]}`);
       }
+
       if (v.seatMap?.[userId]) {
-        recent.push(`🚢 Voyage #${v.id} → Seat ${v.seatMap[userId]}`);
+        recent.push(`🚢 Voyage #${voyageId} → Seat ${v.seatMap[userId]}`);
       }
     }
 
-    recent = recent.slice(-5); // last 5 only
-   
+    recent = recent.slice(-5);
+
     return interaction.reply({
-  embeds: [
-    {
-      title: "🪪 RO-12 Passenger Profile",
-      color: 0x00aaff,
-      fields: [
+      embeds: [
         {
-          name: "👤 Username",
-          value: interaction.user.username,
-          inline: true
-        },
-        {
-          name: "🎭 Role",
-          value: "Passenger",
-          inline: true
-        },
-        {
-          name: "💰 Balance",
-          value: `${user.balance} credits`,
-          inline: true
-        },
-        {
-          name: "⏱️ In-server time",
-          value: timeHere,
-          inline: false
-        },
-        {
-          name: "🎫 Recent bookings",
-          value: recent.length
-            ? recent.join("\n")
-            : "No bookings yet",
-          inline: false
+          title: "🪪 RO-12 Passenger Profile",
+          color: 0x00aaff,
+          fields: [
+            {
+              name: "👤 Username",
+              value: interaction.user.username,
+              inline: true
+            },
+            {
+              name: "🎭 Role",
+              value: "Passenger",
+              inline: true
+            },
+            {
+              name: "💰 Balance",
+              value: `${user.balance} credits`,
+              inline: true
+            },
+            {
+              name: "⏱️ In-server time",
+              value: timeHere,
+              inline: false
+            },
+            {
+              name: "🎫 Recent bookings",
+              value: recent.length
+                ? recent.join("\n")
+                : "No bookings yet",
+              inline: false
+            }
+          ]
         }
-      ]
-    }
-  ],
-  ephemeral: true
-});
+      ],
+      ephemeral: true
+    });
+  }
+};
