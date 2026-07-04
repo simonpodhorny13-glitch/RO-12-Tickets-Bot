@@ -1,3 +1,5 @@
+const { SlashCommandBuilder } = require("discord.js");
+
 function formatTime(ms) {
   const sec = Math.floor(ms / 1000);
   const min = Math.floor(sec / 60);
@@ -8,7 +10,9 @@ function formatTime(ms) {
 }
 
 module.exports = {
-  name: "profile",
+  data: new SlashCommandBuilder()
+    .setName("profile")
+    .setDescription("View your RO-12 passenger profile"),
 
   async execute(interaction, { data, voyages }) {
     const userId = interaction.user.id;
