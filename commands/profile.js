@@ -12,33 +12,20 @@ function formatTime(ms) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("profile")
-    .setDescription("View your RO-12 passenger profile"),
+    .setDescription("View your RO-12 profile"),
 
-  async execute(interaction, { data, voyages }) {
-    const userId = interaction.user.id;
-    const user = getUser(userId);
-
-    if (!user) {
-      return interaction.reply({
-        content: "❓️ No profile found.",
-        ephemeral: true
-      });
-    }
-
-    user.balance = Number(user.balance || 0);
-    const firstSeen = user.firstSeen || Date.now();
-
-    const timeHere = formatTime(Date.now() - firstSeen);
+  async execute(interaction, { data, voyages, getUser }) {
+    const user = getUser(interaction.user.id);
 
     let recent = [];
 
-    for (const [voyageId, v] of Object.entries(voyages || {})) {
-      if (v.cabinMap?.[userId]) {
-        recent.push(`🚢 Voyage #${voyageId} → Cabin ${v.cabinMap[userId]}`);
+    for (const [id, v] of Object.entries(voyages || {})) {
+      if (v.cabinMap?.[interaction.user.id]) {
+        recent.push(`🚢 Voyage #${id} → Cabin ${v.cabinMap[interaction.user.id]}`);
       }
 
-      if (v.seatMap?.[userId]) {
-        recent.push(`🚢 Voyage #${voyageId} → Seat ${v.seatMap[userId]}`);
+      if (v.seatMap?.[interaction.user.id]) {
+        recent.push(`🚢 Voyage #${id} → Seat ${v.seatMap[interaction.user.id]}`);
       }
     }
 
@@ -47,35 +34,14 @@ module.exports = {
     return interaction.reply({
       embeds: [
         {
-          title: "🪪 RO-12 Passenger Profile",
+          title: "🪪 RO-12 Profile",
           color: 0x00aaff,
           fields: [
+            { name: "👤 User", value: interaction.user.username, inline: true },
+            { name: "💰 Balance", value: `${user.balance}`, inline: true },
             {
-              name: "👤 Username",
-              value: interaction.user.username,
-              inline: true
-            },
-            {
-              name: "🎭 Role",
-              value: "Passenger",
-              inline: true
-            },
-            {
-              name: "💰 Balance",
-              value: `${user.balance} credits`,
-              inline: true
-            },
-            {
-              name: "⏱️ In-server time",
-              value: timeHere,
-              inline: false
-            },
-            {
-              name: "🎫 Recent bookings",
-              value: recent.length
-                ? recent.join("\n")
-                : "No bookings yet",
-              inline: false
+              name: "🎫 Bookings",
+              value: recent.length ? recent.join("\n") : "None"
             }
           ]
         }
