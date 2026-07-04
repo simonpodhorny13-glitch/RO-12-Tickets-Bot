@@ -145,10 +145,9 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // ================= BUTTONS (NEW FIX) =================
+  // ================= BUTTONS (MISSING FIX) =================
   if (interaction.isButton()) {
 
-    // 🚢 Voyage help button
     if (interaction.customId.startsWith("voyage_help_")) {
       return interaction.reply({
         content:
