@@ -29,6 +29,26 @@ const client = new Client({
     GatewayIntentBits.GuildMembers
   ]
 });
+const fs = require("fs");
+
+client.commands = new Collection();
+
+const commandFiles = fs
+  .readdirSync("./commands")
+  .filter(file => file.endsWith(".js"));
+
+for (const file of commandFiles) {
+  const command = require(`./commands/${file}`);
+
+  if (!command.data || !command.execute) {
+    console.log(`❌ Skipped invalid command: ${file}`);
+    continue;
+  }
+
+  client.commands.set(command.data.name, command);
+}
+
+console.log("✅ Loaded commands:", [...client.commands.keys()]);
 
 const TOKEN = process.env.TOKEN;
 
@@ -75,8 +95,7 @@ client.on("messageCreate", async (message) => {
     if (content === "!ping") {
       const sent = await message.channel.send("🏓 Pong!");
       const latency = sent.createdTimestamp - message.createdTimestamp;
-      const apiPing = Math.round(client.ws.ping);
-      return sent.edit(`🏓 Pong!\n⏱️ ${latency}ms\n📡 ${apiPing}ms`);
+      return sent.edit(`🏓 Pong!\n⏱️ ${latency}ms`);
     }
 
     if (content === "!balance") {
@@ -147,10 +166,8 @@ client.commands = new Collection();
 
 
 // ===============================
-// SLASH COMMAND HANDLER (ADD THIS)
+// SLASH COMMAND HANDLER
 // ===============================
-
-client.commands = client.commands || new Collection();
 
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
