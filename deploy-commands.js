@@ -6,7 +6,12 @@ const commandFiles = fs.readdirSync("./commands");
 
 for (const file of commandFiles) {
   const command = require(`./commands/${file}`);
+
+  // Skip prefix commands
+  if (!command.data || !command.data.toJSON) continue;
+
   commands.push(command.data.toJSON());
+}
 }
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
@@ -15,7 +20,7 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
   try {
     console.log(`Found ${commands.length} commands. Deploying...`);
 
-    // 🔥 IMPORTANT: Guild deploy (instant + safe for testing)
+    // Guild deploy (instant + safe for testing)
     await rest.put(
       Routes.applicationGuildCommands(
         process.env.CLIENT_ID,
