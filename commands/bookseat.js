@@ -17,7 +17,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    const seat = interaction.options.getString("seat");
+    const seat = interaction.options.getString("seat").toUpperCase();
     const voyageId = interaction.options.getString("voyage");
 
     const data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
@@ -48,6 +48,15 @@ module.exports = {
       return interaction.reply({ content: "❌ You already booked for this voyage.", ephemeral: true });
     }
 
+    // 🧠 VALID SEAT FORMAT
+    const validSeat = /^[1-3][A-D]$/;
+    if (!validSeat.test(seat)) {
+      return interaction.reply({
+        content: "❌ Invalid seat. Use format like 1A, 2B, 3D.",
+        ephemeral: true
+      });
+    }
+
     if (!voyage.seatMap) voyage.seatMap = {};
 
     if (voyage.seatMap[seat]) {
@@ -60,8 +69,8 @@ module.exports = {
     if (["1A", "1B", "1C", "1D"].includes(seat)) price = 80;
     if (["2A", "2B", "2C", "2D"].includes(seat)) price = 50;
 
-    if (voyage.length === 2) price *= 1.5;
-    if (voyage.length === 3) price *= 2;
+    if (voyage.length === 2) price = Math.round(price * 1.5);
+    if (voyage.length === 3) price = Math.round(price * 2);
 
     if (user.balance < price) {
       return interaction.reply({ content: "❌ Not enough balance.", ephemeral: true });
@@ -72,10 +81,23 @@ module.exports = {
     user.bookings[voyageId] = {
       type: "seat",
       location: seat,
-      paid: price
+      paid: price,
+      bookedAt: Date.now()
     };
 
     voyage.seatMap[seat] = userId;
+
+    // 🧾 TRANSACTION LOG
+    if (!data.transactions) data.transactions = [];
+
+    data.transactions.push({
+      type: "seat_booking",
+      userId,
+      voyageId,
+      seat,
+      amount: -price,
+      timestamp: new Date().toISOString()
+    });
 
     fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
 
