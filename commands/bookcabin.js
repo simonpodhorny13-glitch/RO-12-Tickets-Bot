@@ -1,8 +1,20 @@
 const fs = require("fs");
+const { SlashCommandBuilder } = require("discord.js");
 
 module.exports = {
-  name: "bookcabin",
-  description: "Book a cabin for a voyage",
+  data: new SlashCommandBuilder()
+    .setName("bookcabin")
+    .setDescription("Book a cabin for a voyage")
+    .addStringOption(option =>
+      option.setName("voyage")
+        .setDescription("Voyage ID")
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName("location")
+        .setDescription("Cabin location (e.g. 1A, 2B)")
+        .setRequired(true)
+    ),
 
   async execute(interaction) {
     const location = interaction.options.getString("location");
@@ -11,7 +23,7 @@ module.exports = {
     const data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
     const userId = interaction.user.id;
 
-    const voyage = data.voyages[voyageId];
+    const voyage = data.voyages?.[voyageId];
 
     if (!voyage) {
       return interaction.reply({ content: "❌ Voyage not found.", ephemeral: true });
@@ -65,7 +77,7 @@ module.exports = {
 
     fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
 
-    interaction.reply({
+    return interaction.reply({
       content: `🛏️ Cabin ${location} booked for ${voyageId}\n💰 Paid: $${price}`,
       ephemeral: true
     });
