@@ -16,7 +16,7 @@ module.exports = {
     }
 
     // Reset all balances
-    const users = {};
+    const users = { ...data.users };
 
     // Rebuild from scratch
     for (const tx of data.transactions) {
