@@ -1,8 +1,20 @@
 const fs = require("fs");
+const { SlashCommandBuilder } = require("discord.js");
 
 module.exports = {
-  name: "bookseat",
-  description: "Book a seat for a voyage",
+  data: new SlashCommandBuilder()
+    .setName("bookseat")
+    .setDescription("Book a seat for a voyage")
+    .addStringOption(option =>
+      option.setName("voyage")
+        .setDescription("Voyage ID")
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName("seat")
+        .setDescription("Seat (e.g. 1A, 2B, 3C)")
+        .setRequired(true)
+    ),
 
   async execute(interaction) {
     const seat = interaction.options.getString("seat");
@@ -11,7 +23,7 @@ module.exports = {
     const data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
     const userId = interaction.user.id;
 
-    const voyage = data.voyages[voyageId];
+    const voyage = data.voyages?.[voyageId];
 
     if (!voyage) {
       return interaction.reply({ content: "❌ Voyage not found.", ephemeral: true });
@@ -36,12 +48,17 @@ module.exports = {
       return interaction.reply({ content: "❌ You already booked for this voyage.", ephemeral: true });
     }
 
+    if (!voyage.seatMap) voyage.seatMap = {};
+
     if (voyage.seatMap[seat]) {
       return interaction.reply({ content: "❌ Seat already taken.", ephemeral: true });
     }
 
     // 💰 pricing
     let price = 40;
+
+    if (["1A", "1B", "1C", "1D"].includes(seat)) price = 80;
+    if (["2A", "2B", "2C", "2D"].includes(seat)) price = 50;
 
     if (voyage.length === 2) price *= 1.5;
     if (voyage.length === 3) price *= 2;
@@ -62,7 +79,7 @@ module.exports = {
 
     fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
 
-    interaction.reply({
+    return interaction.reply({
       content: `💺 Seat ${seat} booked for ${voyageId}\n💰 Paid: $${price}`,
       ephemeral: true
     });
