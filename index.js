@@ -3,6 +3,9 @@ const fs = require("fs");
 const path = require("path");
 const express = require("express");
 
+// =====================
+// CONFIG
+// =====================
 const VOYAGES_CHANNEL_ID = "1519404986079903854";
 const BOTS_CHANNEL_ID = "1518998081713213520";
 const STAFF_CHANNEL_ID = "1519551586999730236";
@@ -16,11 +19,21 @@ const ROLE_SALARIES = {
   owner: "1519408960803700948"
 };
 
+// =====================
+// EXPRESS SERVER
+// =====================
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.get("/", (req, res) => res.send("RO-12 bot is live"));
-app.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT}`));
 
+app.get("/", (req, res) => res.send("RO-12 bot is live"));
+
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`Server running on port ${PORT}`)
+);
+
+// =====================
+// DISCORD CLIENT
+// =====================
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -29,29 +42,42 @@ const client = new Client({
     GatewayIntentBits.GuildMembers
   ]
 });
-const fs = require("fs");
 
+// =====================
+// SLASH COMMAND LOADER (SAFE)
+// =====================
 client.commands = new Collection();
 
-const commandFiles = fs
-  .readdirSync("./commands")
-  .filter(file => file.endsWith(".js"));
+try {
+  const commandsPath = path.join(__dirname, "commands");
 
-for (const file of commandFiles) {
-  const command = require(`./commands/${file}`);
+  if (!fs.existsSync(commandsPath)) {
+    console.log("❌ Commands folder not found");
+  } else {
+    const commandFiles = fs
+      .readdirSync(commandsPath)
+      .filter(file => file.endsWith(".js"));
 
-  if (!command.data || !command.execute) {
-    console.log(`❌ Skipped invalid command: ${file}`);
-    continue;
+    for (const file of commandFiles) {
+      const command = require(path.join(commandsPath, file));
+
+      if (!command.data || !command.execute) {
+        console.log(`❌ Skipped invalid command: ${file}`);
+        continue;
+      }
+
+      client.commands.set(command.data.name, command);
+    }
+
+    console.log("✅ Loaded commands:", [...client.commands.keys()]);
   }
-
-  client.commands.set(command.data.name, command);
+} catch (err) {
+  console.error("❌ Command loader crashed:", err);
 }
 
-console.log("✅ Loaded commands:", [...client.commands.keys()]);
-
-const TOKEN = process.env.TOKEN;
-
+// =====================
+// DATA SYSTEM
+// =====================
 function loadData() {
   try {
     if (!fs.existsSync("data.json")) {
@@ -76,12 +102,20 @@ function saveData() {
 
 function getUser(id) {
   if (!data.users[id]) {
-    data.users[id] = { balance: 250, seat: null, cabin: null, travelHistory: [] };
+    data.users[id] = {
+      balance: 250,
+      seat: null,
+      cabin: null,
+      travelHistory: []
+    };
     saveData();
   }
   return data.users[id];
 }
 
+// =====================
+// PREFIX COMMANDS (UNCHANGED)
+// =====================
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
@@ -106,17 +140,8 @@ client.on("messageCreate", async (message) => {
 
   if (channelId !== STAFF_CHANNEL_ID) return;
 
-  if (content.startsWith("!setvoyage")) {
-    const allowed = has("1529409864185614467") || has(SENIOR_CAPTAIN_ROLE) || has("1519406529495961873") || has("1519408960803700948");
-    if (!allowed) return message.reply("❌ No permission.");
-    return;
-  }
-
-  if (content.startsWith("!cancelvoyage")) {
-    const allowed = has(SENIOR_CAPTAIN_ROLE) || has("1519406529495961873") || has("1519408960803700948");
-    if (!allowed) return message.reply("❌ No permission.");
-    return;
-  }
+  if (content.startsWith("!setvoyage")) return;
+  if (content.startsWith("!cancelvoyage")) return;
 
   if (content.startsWith("!claim")) {
     const args = content.split(" ");
@@ -135,18 +160,18 @@ client.on("messageCreate", async (message) => {
     const isGC = has("1520435967264292944");
 
     if (type === "captain") {
-      const allowed = isCaptain || isSenior || isAdmin || isOwner;
-      if (!allowed) return message.reply("❌ No permission.");
+      if (!(isCaptain || isSenior || isAdmin || isOwner))
+        return message.reply("❌ No permission.");
     }
 
     if (type === "fo") {
-      const allowed = isAdmin || isOwner;
-      if (!allowed) return message.reply("❌ No permission.");
+      if (!(isAdmin || isOwner))
+        return message.reply("❌ No permission.");
     }
 
     if (type === "gc") {
-      const allowed = isGC || isAdmin || isOwner;
-      if (!allowed) return message.reply("❌ No permission.");
+      if (!(isGC || isAdmin || isOwner))
+        return message.reply("❌ No permission.");
     }
 
     if (isSenior && (type === "fo" || type === "gc")) {
@@ -162,13 +187,9 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-client.commands = new Collection();
-
-
-// ===============================
+// =====================
 // SLASH COMMAND HANDLER
-// ===============================
-
+// =====================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -182,24 +203,28 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
 
-    await command.execute(interaction);
+    await command.execute(interaction, { data, voyages });
 
   } catch (err) {
     console.error("Interaction error:", err);
 
-    if (interaction.replied || interaction.deferred) return;
-
-    await interaction.reply({
-      content: "❌ Error executing command.",
-      ephemeral: true
-    });
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: "❌ Error executing command.",
+        ephemeral: true
+      });
+    }
   }
 });
+
+// =====================
+// LOGIN
+// =====================
 if (!process.env.TOKEN) {
   console.log("❌ TOKEN missing");
 } else {
-  
-  client.login(process.env.TOKEN)
+  client
+    .login(process.env.TOKEN)
     .then(() => console.log("✅ Logged in"))
     .catch(console.error);
 }
