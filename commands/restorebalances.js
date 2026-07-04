@@ -4,44 +4,54 @@ const OWNER_ROLE_ID = "1519408960803700948";
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("restorebalances")
-    .setDescription("Restore all balances from transaction history (Owner only)"),
+    .setName("setbalance")
+    .setDescription("Set a user's balance (Owner only)")
+    .addUserOption(option =>
+      option
+        .setName("user")
+        .setDescription("User to modify")
+        .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName("balance")
+        .setDescription("New balance")
+        .setRequired(true)
+        .setMinValue(0)
+    ),
 
-  async execute(interaction, { data, saveData }) {
+  async execute(interaction, { getUser, data, saveData }) {
+
     if (!interaction.member.roles.cache.has(OWNER_ROLE_ID)) {
       return interaction.reply({
-        content: "❌ Only the owner can use this command.",
+        content: "❌ Only the server owner can use this command.",
         ephemeral: true
       });
     }
 
-    // Reset all balances
-    const users = { ...data.users };
+    const target = interaction.options.getUser("user");
+    const newBalance = interaction.options.getInteger("balance");
 
-    // Rebuild from scratch
-    for (const tx of data.transactions) {
-      const userId = tx.userId;
+    const userData = getUser(target.id);
 
-      if (!users[userId]) {
-        users[userId] = { balance: 0 };
-      }
+    const oldBalance = userData.balance;
 
-      // Apply transaction changes
-      if (typeof tx.amount === "number") {
-        users[userId].balance += tx.amount;
-      }
+    userData.balance = newBalance;
 
-      if (typeof tx.newBalance === "number") {
-        users[userId].balance = tx.newBalance;
-      }
-    }
-
-    data.users = users;
+    // 🧾 LOG TRANSACTION (IMPORTANT)
+    data.transactions.push({
+      type: "setbalance",
+      userId: target.id,
+      oldBalance,
+      newBalance,
+      performedBy: interaction.user.id,
+      timestamp: new Date().toISOString()
+    });
 
     await saveData();
 
     return interaction.reply({
-      content: "✅ Balances restored from transactions history.",
+      content: `✅ Set **${target.username}**'s balance to **$${newBalance.toLocaleString()}**.`,
       ephemeral: true
     });
   }
