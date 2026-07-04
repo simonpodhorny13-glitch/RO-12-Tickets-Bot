@@ -1,67 +1,24 @@
-const fs = require("fs");
 const { SlashCommandBuilder } = require("discord.js");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("gift")
-    .setDescription("Gift money to another user")
-    .addUserOption(option =>
-      option.setName("user")
-        .setDescription("User to gift money to")
-        .setRequired(true)
-    )
-    .addIntegerOption(option =>
-      option.setName("amount")
-        .setDescription("Amount to gift")
-        .setRequired(true)
-        .setMinValue(1)
-    ),
+    .setDescription("Gift credits to another user"),
 
-  async execute(interaction) {
-    const senderId = interaction.user.id;
-    const receiver = interaction.options.getUser("user");
+  async execute(interaction, { getUser }) {
+    const sender = getUser(interaction.user.id);
+
+    const target = interaction.options.getUser("user");
     const amount = interaction.options.getInteger("amount");
 
-    if (receiver.id === senderId) {
+    if (!target || !amount || amount <= 0) {
       return interaction.reply({
-        content: "❌ You cannot gift money to yourself.",
+        content: "❌ Invalid usage.",
         ephemeral: true
       });
     }
 
-    let data;
-    try {
-      data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
-    } catch {
-      return interaction.reply({
-        content: "❌ Economy system error.",
-        ephemeral: true
-      });
-    }
-
-    if (!data.users) data.users = {};
-    if (!data.transactions) data.transactions = {};
-
-    if (!data.users[senderId]) {
-      data.users[senderId] = { balance: 0, bookings: {} };
-    }
-
-    if (!data.users[receiver.id]) {
-      data.users[receiver.id] = { balance: 0, bookings: {} };
-    }
-
-    const sender = data.users[senderId];
-    const recipient = data.users[receiver.id];
-
-    sender.balance = Number(sender.balance || 0);
-    recipient.balance = Number(recipient.balance || 0);
-
-    if (amount <= 0) {
-      return interaction.reply({
-        content: "❌ Invalid amount.",
-        ephemeral: true
-      });
-    }
+    const receiver = getUser(target.id);
 
     if (sender.balance < amount) {
       return interaction.reply({
@@ -71,23 +28,10 @@ module.exports = {
     }
 
     sender.balance -= amount;
-    recipient.balance += amount;
-
-    // 💰 transaction log (NEW SYSTEM)
-    const txId = `${Date.now()}_${senderId}`;
-
-    data.transactions[txId] = {
-      type: "gift",
-      from: senderId,
-      to: receiver.id,
-      amount,
-      timestamp: Date.now()
-    };
-
-    fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
+    receiver.balance += amount;
 
     return interaction.reply({
-      content: `🎁 You gifted **$${amount}** to ${receiver.username}`,
+      content: `🎁 Sent $${amount} to ${target.username}!`,
       ephemeral: true
     });
   }
