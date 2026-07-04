@@ -32,52 +32,31 @@ module.exports = {
       return message.reply(`❌ ${role.toUpperCase()} already claimed.`);
     }
 
-    // assign role
     voyage.crew[role] = userId;
 
     const crew = voyage.crew;
 
-    // =========================
-    // 🚢 CAPTAIN + FO LOGIC
-    // =========================
     if (crew.captain && crew.fo) {
 
-      // START GC TIMER ONLY ONCE
       if (!crew.gc && !voyage.gcDeadline) {
         voyage.gcDeadline = Date.now() + 24 * 60 * 60 * 1000;
 
         message.channel.send(
 `⏳ Ground Crew role unclaimed.
-Sales will begin automatically within 24 hours if not claimed.`
+Sales will open automatically within 24 hours if not claimed.`
         );
       }
 
-      // If GC exists, cancel timer
       if (crew.gc && voyage.gcDeadline) {
-        delete voyage.gcDeadline;
+        voyage.gcDeadline = null;
       }
 
-      // OPEN SALES IF GC ALREADY PRESENT
       if (crew.gc && !voyage.salesOpen) {
         voyage.salesOpen = true;
 
         message.channel.send(
 `🚢 SALES NOW OPEN
-
-Voyage ID
-${voyageId}
-
-From
-${voyage.from}
-
-To
-${voyage.to}
-
-Ship
-${voyage.ship}
-
-Departing
-${voyage.date}, ${voyage.time}`
+Voyage ID: ${voyageId}`
         );
       }
     }
