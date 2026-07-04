@@ -1,27 +1,35 @@
 const fs = require("fs");
-const { EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 
 module.exports = {
-  name: "map",
-  description: "View cabin or seat map for a voyage",
+  data: new SlashCommandBuilder()
+    .setName("map")
+    .setDescription("View cabin or seat map for a voyage")
+    .addStringOption(option =>
+      option.setName("voyage")
+        .setDescription("Voyage ID")
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option.setName("type")
+        .setDescription("cabins or seats")
+        .setRequired(true)
+        .addChoices(
+          { name: "cabins", value: "cabins" },
+          { name: "seats", value: "seats" }
+        )
+    ),
 
   async execute(interaction) {
     const voyageId = interaction.options.getString("voyage");
-    const type = interaction.options.getString("type"); // cabins or seats
+    const type = interaction.options.getString("type");
 
     const data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
-    const voyage = data.voyages[voyageId];
+    const voyage = data.voyages?.[voyageId];
 
     if (!voyage) {
       return interaction.reply({
         content: "❌ Voyage not found.",
-        ephemeral: true
-      });
-    }
-
-    if (!type || (type !== "cabins" && type !== "seats")) {
-      return interaction.reply({
-        content: "❌ Type must be 'cabins' or 'seats'.",
         ephemeral: true
       });
     }
@@ -47,21 +55,18 @@ module.exports = {
           value:
             `1A ${isTaken("1A")}  |  1B ${isTaken("1B")}\n` +
             `2A ${isTaken("2A")}  |  2B ${isTaken("2B")}`,
-          inline: false
         },
         {
           name: "🛏️ First Class",
           value:
             `1C ${isTaken("1C")}  |  1D ${isTaken("1D")}\n` +
             `2C ${isTaken("2C")}  |  2D ${isTaken("2D")}`,
-          inline: false
         },
         {
           name: "🛏️ Double Economy",
           value:
             `3A ${isTaken("3A")}  |  3B ${isTaken("3B")}\n` +
             `3C ${isTaken("3C")}  |  3D ${isTaken("3D")}`,
-          inline: false
         }
       );
     } else {
@@ -78,13 +83,9 @@ module.exports = {
 
       embed.addFields({
         name: "💺 Seats Layout",
-        value: seatGrid,
-        inline: false
+        value: seatGrid
       });
     }
-
-    embed.setFooter({ text: "RO-12 Cruise System • Live Map" });
-    embed.setTimestamp();
 
     return interaction.reply({
       embeds: [embed],
