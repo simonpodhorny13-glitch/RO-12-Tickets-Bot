@@ -5,7 +5,6 @@ const express = require("express");
 // ===================== CONFIG =====================
 const BOTS_CHANNEL_ID = "1518998081713213520";
 const STAFF_CHANNEL_ID = "1519551586999730236";
-const SENIOR_CAPTAIN_ROLE = "1521172459385126922";
 
 // ===================== EXPRESS =====================
 const app = express();
@@ -24,22 +23,25 @@ const client = new Client({
   ]
 });
 
-client.commands = new Collection();       // slash
-client.prefixCommands = new Collection(); // prefix
+client.commands = new Collection();
+client.prefixCommands = new Collection();
 
 // ===================== DATA =====================
 function loadData() {
   if (!fs.existsSync("data.json")) {
-    return { users: {}, voyages: {}, voyageIdCounter: 1 };
+    return {
+      users: {},
+      voyages: {},
+      settings: { nextVoyageId: 1 },
+      transactions: []
+    };
   }
   return JSON.parse(fs.readFileSync("data.json", "utf8"));
 }
 
 let data = loadData();
-let voyages = data.voyages || {};
 
 function saveData() {
-  data.voyages = voyages;
   fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
 }
 
@@ -48,8 +50,7 @@ function getUser(id) {
     data.users[id] = {
       balance: 250,
       firstSeen: Date.now(),
-      seat: null,
-      cabin: null,
+      bookings: {},
       travelHistory: []
     };
     saveData();
@@ -57,7 +58,7 @@ function getUser(id) {
   return data.users[id];
 }
 
-// ===================== SLASH COMMAND LOADER =====================
+// ===================== COMMAND LOADER =====================
 try {
   const commandFiles = fs
     .readdirSync("./commands")
@@ -66,12 +67,10 @@ try {
   for (const file of commandFiles) {
     const cmd = require(`./commands/${file}`);
 
-    // SLASH COMMAND
     if (cmd.data && cmd.execute) {
       client.commands.set(cmd.data.name, cmd);
     }
 
-    // PREFIX COMMAND (NO data field)
     if (cmd.name && cmd.execute && !cmd.data) {
       client.prefixCommands.set(cmd.name, cmd);
     }
@@ -84,10 +83,9 @@ try {
   console.error("Command loader error:", err);
 }
 
-// ===================== PREFIX COMMAND HANDLER =====================
+// ===================== PREFIX COMMANDS =====================
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-
   if (!message.content.startsWith("!")) return;
 
   const args = message.content.slice(1).trim().split(/ +/);
@@ -97,13 +95,13 @@ client.on("messageCreate", async (message) => {
   if (!command) return;
 
   try {
-    await command.execute(message, args, { data, voyages, getUser });
+    await command.execute(message, args, { data, getUser });
   } catch (err) {
     console.error(err);
     message.reply("❌ Error executing command");
   }
 
-  // (optional legacy support still kept)
+  // legacy shortcuts
   if (message.channel.id === BOTS_CHANNEL_ID) {
     if (message.content === "!balance") {
       const u = getUser(message.author.id);
@@ -116,7 +114,7 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-// ===================== SLASH COMMAND HANDLER =====================
+// ===================== INTERACTIONS =====================
 client.on("interactionCreate", async (interaction) => {
 
   // ================= SLASH COMMANDS =================
@@ -131,7 +129,7 @@ client.on("interactionCreate", async (interaction) => {
         });
       }
 
-      await command.execute(interaction, { data, voyages, getUser });
+      await command.execute(interaction, { data, getUser });
 
     } catch (err) {
       console.error(err);
@@ -145,7 +143,7 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // ================= BUTTONS (MISSING FIX) =================
+  // ================= BUTTONS =================
   if (interaction.isButton()) {
 
     if (interaction.customId.startsWith("voyage_help_")) {
@@ -156,30 +154,6 @@ client.on("interactionCreate", async (interaction) => {
           "2. Enter Voyage ID\n" +
           "3. Choose your seat/cabin\n\n" +
           "💡 Example: `/bookseat voyage:0001 seat:3A`",
-        ephemeral: true
-      });
-    }
-  }
-});
-
-  try {
-    const command = client.commands.get(interaction.commandName);
-
-    if (!command) {
-      return interaction.reply({
-        content: "❌ Command not found",
-        ephemeral: true
-      });
-    }
-
-    await command.execute(interaction, { data, voyages, getUser });
-
-  } catch (err) {
-    console.error(err);
-
-    if (!interaction.replied) {
-      await interaction.reply({
-        content: "❌ Error executing command",
         ephemeral: true
       });
     }
