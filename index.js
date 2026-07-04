@@ -1,6 +1,5 @@
 const { Client, GatewayIntentBits, Collection } = require("discord.js");
 const fs = require("fs");
-const path = require("path");
 const express = require("express");
 
 // ===================== CONFIG =====================
@@ -25,7 +24,8 @@ const client = new Client({
   ]
 });
 
-client.commands = new Collection();
+client.commands = new Collection();       // slash
+client.prefixCommands = new Collection(); // prefix
 
 // ===================== DATA =====================
 function loadData() {
@@ -57,7 +57,7 @@ function getUser(id) {
   return data.users[id];
 }
 
-// ===================== COMMAND LOADER =====================
+// ===================== SLASH COMMAND LOADER =====================
 try {
   const commandFiles = fs
     .readdirSync("./commands")
@@ -66,36 +66,57 @@ try {
   for (const file of commandFiles) {
     const cmd = require(`./commands/${file}`);
 
-    if (!cmd.data || !cmd.execute) {
-      console.log("Skipped:", file);
-      continue;
+    // SLASH COMMAND
+    if (cmd.data && cmd.execute) {
+      client.commands.set(cmd.data.name, cmd);
     }
 
-    client.commands.set(cmd.data.name, cmd);
+    // PREFIX COMMAND (NO data field)
+    if (cmd.name && cmd.execute && !cmd.data) {
+      client.prefixCommands.set(cmd.name, cmd);
+    }
   }
 
-  console.log("Loaded commands:", [...client.commands.keys()]);
+  console.log("Slash commands:", [...client.commands.keys()]);
+  console.log("Prefix commands:", [...client.prefixCommands.keys()]);
+
 } catch (err) {
   console.error("Command loader error:", err);
 }
 
-// ===================== PREFIX =====================
+// ===================== PREFIX COMMAND HANDLER =====================
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  if (message.channel.id === BOTS_CHANNEL_ID) {
-    if (message.content === "!ping") {
-      return message.reply("🏓 Pong!");
-    }
+  if (!message.content.startsWith("!")) return;
 
+  const args = message.content.slice(1).trim().split(/ +/);
+  const commandName = args.shift().toLowerCase();
+
+  const command = client.prefixCommands.get(commandName);
+  if (!command) return;
+
+  try {
+    await command.execute(message, args, { data, voyages, getUser });
+  } catch (err) {
+    console.error(err);
+    message.reply("❌ Error executing command");
+  }
+
+  // (optional legacy support still kept)
+  if (message.channel.id === BOTS_CHANNEL_ID) {
     if (message.content === "!balance") {
       const u = getUser(message.author.id);
       return message.reply(`💰 $${u.balance}`);
     }
+
+    if (message.content === "!ping") {
+      return message.reply("🏓 Pong!");
+    }
   }
 });
 
-// ===================== SLASH =====================
+// ===================== SLASH COMMAND HANDLER =====================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
