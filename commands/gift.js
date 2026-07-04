@@ -29,25 +29,23 @@ module.exports = {
       });
     }
 
-    let data = {};
+    let data;
     try {
       data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
-    } catch (err) {
-      console.log("⚠️ Failed to read data.json:", err);
+    } catch {
       return interaction.reply({
-        content: "❌ Economy system error. Try again later.",
+        content: "❌ Economy system error.",
         ephemeral: true
       });
     }
 
     if (!data.users) data.users = {};
+    if (!data.transactions) data.transactions = {};
 
-    // Ensure sender exists safely
     if (!data.users[senderId]) {
       data.users[senderId] = { balance: 0, bookings: {} };
     }
 
-    // Ensure receiver exists safely
     if (!data.users[receiver.id]) {
       data.users[receiver.id] = { balance: 0, bookings: {} };
     }
@@ -55,7 +53,6 @@ module.exports = {
     const sender = data.users[senderId];
     const recipient = data.users[receiver.id];
 
-    // Normalize balances safely
     sender.balance = Number(sender.balance || 0);
     recipient.balance = Number(recipient.balance || 0);
 
@@ -73,15 +70,13 @@ module.exports = {
       });
     }
 
-    // Transfer
     sender.balance -= amount;
     recipient.balance += amount;
 
-    // Optional: transaction log (uses existing structure safely)
-    if (!data.claims) data.claims = {};
-
+    // 💰 transaction log (NEW SYSTEM)
     const txId = `${Date.now()}_${senderId}`;
-    data.claims[txId] = {
+
+    data.transactions[txId] = {
       type: "gift",
       from: senderId,
       to: receiver.id,
@@ -89,16 +84,7 @@ module.exports = {
       timestamp: Date.now()
     };
 
-    // Safe write
-    try {
-      fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
-    } catch (err) {
-      console.log("⚠️ Failed to write data.json:", err);
-      return interaction.reply({
-        content: "❌ Failed to save transaction.",
-        ephemeral: true
-      });
-    }
+    fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
 
     return interaction.reply({
       content: `🎁 You gifted **$${amount}** to ${receiver.username}`,
