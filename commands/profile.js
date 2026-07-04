@@ -37,43 +37,42 @@ module.exports = {
     }
 
     recent = recent.slice(-5); // last 5 only
-
+   
     return interaction.reply({
-      embeds: [
+  embeds: [
+    {
+      title: "🪪 RO-12 Passenger Profile",
+      color: 0x00aaff,
+      fields: [
         {
-          title: "🪪 RO-12 Passenger Profile",
-          color: 0x00aaff,
-          fields: [
-            {
-              name: "👤 Username",
-              value: interaction.user.username,
-              inline: true
-            },
-            {
-              name: "🎭 Role",
-              value: "Passenger",
-              inline: true
-            },
-            {
-              name: "💰 Balance",
-              value: `${user.balance ?? 0} credits`,
-              inline: true
-            },
-            {
-              name: "⏱️ In-server time",
-              value: timeHere,
-              inline: false
-            },
-            {
-              name: "🎫 Recent bookings",
-              value: recent.length
-                ? recent.join("\n")
-                : "No bookings yet",
-              inline: false
-            }
-          ]
+          name: "👤 Username",
+          value: interaction.user.username,
+          inline: true
+        },
+        {
+          name: "🎭 Role",
+          value: "Passenger",
+          inline: true
+        },
+        {
+          name: "💰 Balance",
+          value: `${user.balance} credits`,
+          inline: true
+        },
+        {
+          name: "⏱️ In-server time",
+          value: timeHere,
+          inline: false
+        },
+        {
+          name: "🎫 Recent bookings",
+          value: recent.length
+            ? recent.join("\n")
+            : "No bookings yet",
+          inline: false
         }
       ]
-    });
-  }
-};
+    }
+  ],
+  ephemeral: true
+});
