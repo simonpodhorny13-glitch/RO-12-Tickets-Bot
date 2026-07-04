@@ -1,5 +1,4 @@
 const fs = require("fs");
-
 const {
   ActionRowBuilder,
   ButtonBuilder,
@@ -14,12 +13,13 @@ const SENIOR_CAPTAIN_ROLE_ID = "1521172459385126922";
 const STAFF_CHANNEL_ID = "1519551586999730236";
 const VOYAGES_CHANNEL_ID = "1519404986079903854";
 
+const ALLOWED_SHIPS = ["RO-12", "RO-11", "RO-13", "RO-21"];
+
 module.exports = {
   name: "setvoyage",
 
   execute(message, args) {
 
-    // 📍 CHANNEL LOCK
     if (message.channel.id !== STAFF_CHANNEL_ID) {
       return message.reply("❌ You can only use this command in #staff.");
     }
@@ -31,19 +31,16 @@ module.exports = {
     }
 
     let data = {};
-
     try {
       data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
-    } catch (err) {
+    } catch {
       return message.reply("❌ Data file error.");
     }
 
-    // 🧠 INIT SAFETY
     if (!data.settings) data.settings = { nextVoyageId: 1 };
     if (!data.voyages) data.voyages = {};
     if (!data.transactions) data.transactions = [];
 
-    // 🔐 ROLE CHECK
     const member = message.member;
 
     const hasPermission =
@@ -60,9 +57,16 @@ module.exports = {
     const from = args[0];
     const to = args[1];
     const length = parseInt(args[2]);
-    const ship = args[3];
+    const ship = args[3].toUpperCase();
     const date = args[4];
     const time = args.slice(5).join(" ");
+
+    // 🚢 SHIP VALIDATION
+    if (!ALLOWED_SHIPS.includes(ship)) {
+      return message.reply(
+        `❌ Invalid ship. Allowed ships: ${ALLOWED_SHIPS.join(", ")}`
+      );
+    }
 
     if (![1, 2, 3].includes(length)) {
       return message.reply("❌ Length must be 1, 2, or 3.");
@@ -72,13 +76,22 @@ module.exports = {
       return message.reply("❌ Missing date or time.");
     }
 
-    // 🚢 ID
-    let idNum = Number(data.settings.nextVoyageId || 1);
-    const voyageId = idNum.toString().padStart(4, "0");
+    // 🚫 DUPLICATE CHECK
+    const duplicate = Object.values(data.voyages).find(v =>
+      v.from === from &&
+      v.to === to &&
+      v.date === date &&
+      v.time === time &&
+      v.ship === ship
+    );
 
-    if (data.voyages[voyageId]) {
-      return message.reply("❌ Voyage ID collision. Try again.");
+    if (duplicate) {
+      return message.reply("❌ This voyage already exists.");
     }
+
+    // 🚢 ID
+    const idNum = Number(data.settings.nextVoyageId || 1);
+    const voyageId = idNum.toString().padStart(4, "0");
 
     // 💰 PRICE
     const price = length === 1 ? 50 : length === 2 ? 75 : 100;
@@ -94,8 +107,11 @@ module.exports = {
       basePrice: price,
 
       status: "scheduled",
-      salesOpen: true,
+      salesOpen: false, // 🔥 FIX: must be opened manually
       cancelled: false,
+
+      createdBy: message.author.id,
+      createdAt: Date.now(),
 
       crew: {
         captain: null,
@@ -104,12 +120,14 @@ module.exports = {
       },
 
       cabinMap: {},
-      seatMap: {}
+      seatMap: {},
+
+      announcement: null,
+      staffMessage: null
     };
 
     data.settings.nextVoyageId = idNum + 1;
 
-    // 🧾 TRANSACTION LOG
     data.transactions.push({
       type: "voyage_create",
       voyageId,
@@ -122,80 +140,65 @@ module.exports = {
       timestamp: new Date().toISOString()
     });
 
-    // 💾 SAVE
-    try {
-      fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
-    } catch (err) {
-      return message.reply("❌ Failed to save voyage.");
-    }
+    fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
 
-    // 👨‍✈️ CREW MENTIONS
-    const voyage = data.voyages[voyageId];
+    const voyagesChannel = message.guild.channels.cache.get(VOYAGES_CHANNEL_ID);
+    const staffChannel = message.guild.channels.cache.get(STAFF_CHANNEL_ID);
 
-    const captain = voyage.crew.captain
-      ? `<@${voyage.crew.captain}>`
-      : "N/A";
-
-    const fo = voyage.crew.fo
-      ? `<@${voyage.crew.fo}>`
-      : "N/A";
-
-    const gc = voyage.crew.gc
-      ? `<@${voyage.crew.gc}>`
-      : "N/A";
-
-    // 🔘 BUTTON
+    // 🔘 FIXED BUTTON (IMPORTANT)
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`how_book_${voyageId}`)
-        .setLabel("🎟 How can I book?")
+        .setCustomId(`voyage_help_${voyageId}`)
+        .setLabel("🎟 How to book")
         .setStyle(ButtonStyle.Primary)
     );
 
-    // 📢 EMBED MESSAGE (VOYAGES)
-    const voyagesChannel = message.guild.channels.cache.get(VOYAGES_CHANNEL_ID);
-
+    // 📢 PUBLIC MESSAGE
     if (voyagesChannel) {
       voyagesChannel.send({
-        embeds: [
-          {
-            title: `🚢 VOYAGE ${voyageId} SALES OPEN!`,
-            description:
-`📍 From: ${from}
-🎯 To: ${to}
-⏳ Length: ${length === 1 ? "Short" : length === 2 ? "Medium" : "Long"}
-📅 Departing: ${date}, ${time}
-
-👨‍✈️ Captain: ${captain}
-🧑‍✈️ First Officer: ${fo}
-👷 Ground Crew: ${gc}
+        embeds: [{
+          title: `🚢 VOYAGE ${voyageId} CREATED`,
+          description:
+`📍 ${from} → ${to}
+⏳ Length: ${length}
+🚢 Ship: ${ship}
+📅 ${date} ${time}
 
 💰 Base price: $${price}`,
-            color: 0x00b0f4
-          }
-        ],
+          color: 0x00b0f4
+        }],
         components: [row]
+      }).then(msg => {
+        data.voyages[voyageId].announcement = {
+          channelId: msg.channel.id,
+          messageId: msg.id
+        };
+        fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
       });
     }
 
     // 📢 STAFF MESSAGE
-    const staffChannel = message.guild.channels.cache.get(STAFF_CHANNEL_ID);
-
     if (staffChannel) {
       staffChannel.send(
-`🚨 VOYAGE ${voyageId} SALES OPEN
+`🚨 VOYAGE ${voyageId} CREATED
 
 ||<@&1519406529495961873> <@&1519409864185614467> <@&1521172459385126922> <@&1519408960803700948>||
 
 📍 ${from} → ${to}
-⏳ ${length === 1 ? "Short" : length === 2 ? "Medium" : "Long"}
-📅 ${date}, ${time}
+🚢 Ship: ${ship}
+⏳ ${length}
+📅 ${date} ${time}
 
-👤 Created by: ${message.author.username}`
-      );
+👤 ${message.author.username}`
+      ).then(msg => {
+        data.voyages[voyageId].staffMessage = {
+          channelId: msg.channel.id,
+          messageId: msg.id
+        };
+        fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
+      });
     }
 
-    // 📢 CONFIRMATION
-    message.channel.send(`✅ Voyage ${voyageId} successfully created and published.`);
+    message.channel.send(`✅ Voyage ${voyageId} created successfully.`);
   }
 };
