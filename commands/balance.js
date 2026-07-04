@@ -18,9 +18,8 @@ module.exports = {
     const userId = interaction.user.id;
     const userBalance = data?.users?.[userId]?.balance ?? 0;
 
-    await interaction.reply({
-      content: `💰 Your balance: **${userBalance}**`,
-      ephemeral: true
-    });
-  }
-};
+    const user = getUser(interaction.user.id);
+
+return interaction.reply({
+  content: `💰 Your balance: $${user.balance}`
+});
