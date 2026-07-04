@@ -3,7 +3,19 @@ const { SlashCommandBuilder } = require("discord.js");
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("gift")
-    .setDescription("Gift credits to another user"),
+    .setDescription("Gift cash to another user")
+    .addUserOption(option =>
+      option
+        .setName("user")
+        .setDescription("User to send cash to")
+        .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName("amount")
+        .setDescription("Amount to send")
+        .setRequired(true)
+    ),
 
   async execute(interaction, { getUser }) {
     const sender = getUser(interaction.user.id);
@@ -11,9 +23,9 @@ module.exports = {
     const target = interaction.options.getUser("user");
     const amount = interaction.options.getInteger("amount");
 
-    if (!target || !amount || amount <= 0) {
+    if (amount <= 0) {
       return interaction.reply({
-        content: "❌ Invalid usage.",
+        content: "❌ Amount must be greater than 0.",
         ephemeral: true
       });
     }
@@ -22,7 +34,7 @@ module.exports = {
 
     if (sender.balance < amount) {
       return interaction.reply({
-        content: "❌ Not enough balance.",
+        content: "❌ You don’t have enough balance.",
         ephemeral: true
       });
     }
@@ -31,7 +43,7 @@ module.exports = {
     receiver.balance += amount;
 
     return interaction.reply({
-      content: `🎁 Sent $${amount} to ${target.username}!`,
+      content: `🎁 Sent **$${amount}** to **${target.username}**!`,
       ephemeral: true
     });
   }
