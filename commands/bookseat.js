@@ -49,7 +49,7 @@ module.exports = {
     }
 
     // 🧠 VALID SEAT FORMAT
-    const validSeat = /^[1-3][A-D]$/;
+    const validSeat = /^(?:[1-9]|1\d|20)[A-D]$/;
     if (!validSeat.test(seat)) {
       return interaction.reply({
         content: "❌ Invalid seat. Use format like 1A, 2B, 3D.",
