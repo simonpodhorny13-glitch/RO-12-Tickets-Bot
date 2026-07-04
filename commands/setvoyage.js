@@ -4,37 +4,55 @@ module.exports = {
   name: "setvoyage",
 
   execute(message, args) {
-    // format:
-    // example use: !setvoyage Prague Hamburg 2 RO-12 2nd June 5:00 UTC
-
     if (args.length < 6) {
       return message.reply(
         "❌ Usage: !setvoyage <from> <to> <length 1/2/3> <ship> <date> <time>"
       );
     }
 
-    const filePath = "./data.json";
-    const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    let data = {};
+
+    try {
+      data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
+    } catch (err) {
+      return message.reply("❌ Data file error.");
+    }
+
+    if (!data.settings) {
+      data.settings = { nextVoyageId: 1 };
+    }
+
+    if (!data.voyages) {
+      data.voyages = {};
+    }
 
     const from = args[0];
     const to = args[1];
-    const length = parseInt(args[2]);
-    const ship = args[3];
 
+    const length = parseInt(args[2]);
+
+    if (![1, 2, 3].includes(length)) {
+      return message.reply("❌ Length must be 1, 2, or 3.");
+    }
+
+    const ship = args[3];
     const date = args[4];
     const time = args.slice(5).join(" ");
 
-    // get next voyage ID
-    let idNum = data.settings.nextVoyageId || 1;
+    let idNum = Number(data.settings.nextVoyageId || 1);
+
     const voyageId = idNum.toString().padStart(4, "0");
 
-    // create voyage
+    // safety: prevent overwrite
+    if (data.voyages[voyageId]) {
+      return message.reply("❌ Voyage ID collision. Try again.");
+    }
+
     data.voyages[voyageId] = {
       from,
       to,
       length,
       ship,
-
       date,
       time,
 
@@ -51,12 +69,16 @@ module.exports = {
       seatMap: {}
     };
 
-    // increment ID
     data.settings.nextVoyageId = idNum + 1;
 
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    try {
+      fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
+    } catch (err) {
+      return message.reply("❌ Failed to save voyage.");
+    }
 
-    // send staff message (same channel where command is used)
+    const price = length === 1 ? 50 : length === 2 ? 75 : 100;
+
     message.channel.send(
 `🚢 VOYAGE CREATED
 
@@ -88,7 +110,7 @@ Voyage Length
 ${length === 1 ? "Short" : length === 2 ? "Medium" : "Long"}
 
 Base Price
-$${length === 1 ? 50 : length === 2 ? 75 : 100}
+$${price}
 `
     );
   }
