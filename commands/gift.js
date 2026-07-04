@@ -4,62 +4,104 @@ const { SlashCommandBuilder } = require("discord.js");
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("gift")
-    .setDescription("Send RO-12 cash to another user")
+    .setDescription("Gift money to another user")
     .addUserOption(option =>
-      option
-        .setName("user")
-        .setDescription("User to send money to")
+      option.setName("user")
+        .setDescription("User to gift money to")
         .setRequired(true)
     )
     .addIntegerOption(option =>
-      option
-        .setName("amount")
-        .setDescription("Amount of money to send")
+      option.setName("amount")
+        .setDescription("Amount to gift")
         .setRequired(true)
+        .setMinValue(1)
     ),
 
   async execute(interaction) {
     const senderId = interaction.user.id;
-    const targetUser = interaction.options.getUser("user");
+    const receiver = interaction.options.getUser("user");
     const amount = interaction.options.getInteger("amount");
 
-    if (targetUser.id === senderId) {
+    if (receiver.id === senderId) {
       return interaction.reply({
         content: "❌ You cannot gift money to yourself.",
         ephemeral: true
       });
     }
 
-    if (amount <= 0) {
+    let data = {};
+    try {
+      data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
+    } catch (err) {
+      console.log("⚠️ Failed to read data.json:", err);
       return interaction.reply({
-        content: "❌ Amount must be greater than 0.",
+        content: "❌ Economy system error. Try again later.",
         ephemeral: true
       });
     }
-
-    const data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
 
     if (!data.users) data.users = {};
 
-    if (!data.users[senderId]) data.users[senderId] = { balance: 0 };
-    if (!data.users[targetUser.id]) data.users[targetUser.id] = { balance: 0 };
+    // Ensure sender exists safely
+    if (!data.users[senderId]) {
+      data.users[senderId] = { balance: 0, bookings: {} };
+    }
 
-    const senderBalance = data.users[senderId].balance || 0;
+    // Ensure receiver exists safely
+    if (!data.users[receiver.id]) {
+      data.users[receiver.id] = { balance: 0, bookings: {} };
+    }
 
-    if (senderBalance < amount) {
+    const sender = data.users[senderId];
+    const recipient = data.users[receiver.id];
+
+    // Normalize balances safely
+    sender.balance = Number(sender.balance || 0);
+    recipient.balance = Number(recipient.balance || 0);
+
+    if (amount <= 0) {
       return interaction.reply({
-        content: "❌ You don't have enough money.",
+        content: "❌ Invalid amount.",
         ephemeral: true
       });
     }
 
-    data.users[senderId].balance -= amount;
-    data.users[targetUser.id].balance += amount;
+    if (sender.balance < amount) {
+      return interaction.reply({
+        content: "❌ Not enough balance.",
+        ephemeral: true
+      });
+    }
 
-    fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
+    // Transfer
+    sender.balance -= amount;
+    recipient.balance += amount;
+
+    // Optional: transaction log (uses existing structure safely)
+    if (!data.claims) data.claims = {};
+
+    const txId = `${Date.now()}_${senderId}`;
+    data.claims[txId] = {
+      type: "gift",
+      from: senderId,
+      to: receiver.id,
+      amount,
+      timestamp: Date.now()
+    };
+
+    // Safe write
+    try {
+      fs.writeFileSync("./data.json", JSON.stringify(data, null, 2));
+    } catch (err) {
+      console.log("⚠️ Failed to write data.json:", err);
+      return interaction.reply({
+        content: "❌ Failed to save transaction.",
+        ephemeral: true
+      });
+    }
 
     return interaction.reply({
-      content: `✅ Sent $${amount} to <@${targetUser.id}>`,
+      content: `🎁 You gifted **$${amount}** to ${receiver.username}`,
       ephemeral: true
     });
   }
