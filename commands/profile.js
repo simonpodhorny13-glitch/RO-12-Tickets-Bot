@@ -5,6 +5,9 @@ const {
   ButtonStyle
 } = require("discord.js");
 
+const ADMIN_ROLE_ID = "1519406529495961873";
+const OWNER_ROLE_ID = "1519408960803700948";
+
 function formatDuration(ms) {
   const sec = Math.floor(ms / 1000);
   const min = Math.floor(sec / 60);
@@ -14,7 +17,7 @@ function formatDuration(ms) {
   return `${days}d ${hrs % 24}h ${min % 60}m`;
 }
 
-function getPage1(user, member, data, userData) {
+function getPage1(user, member, userData) {
   let roleName = "Passenger";
 
   if (member) {
@@ -25,11 +28,7 @@ function getPage1(user, member, data, userData) {
     if (roles.first()) roleName = roles.first().name;
   }
 
-  const activeBookings = data.voyages
-    ? Object.values(data.voyages).filter(v =>
-        v.bookings?.some(b => b.userId === user.id)
-      ).length
-    : 0;
+  const activeBookings = Object.keys(userData.bookings || {}).length;
 
   return `👤 **User:** ${user.username}
 👨‍✈️ **Role:** ${roleName}
@@ -39,13 +38,16 @@ function getPage1(user, member, data, userData) {
 }
 
 function getPage2(user, data, userData) {
-  const userTx = data.transactions.filter(t => t.userId === user.id);
+  const userTx = (data.transactions || []).filter(t => t.userId === user.id);
 
   const spent = userTx
     .filter(t => t.amount < 0)
     .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-  const tickets = userTx.filter(t => t.type === "ticket_purchase").length;
+  const tickets = userTx.filter(t =>
+    t.type === "seat_booking" ||
+    t.type === "cabin_booking"
+  ).length;
 
   const timeInServer = Date.now() - userData.joinedAt;
 
@@ -63,16 +65,40 @@ module.exports = {
     .setName("profile")
     .setDescription("View your profile")
     .addUserOption(option =>
-      option.setName("user").setDescription("User").setRequired(false)
+      option
+        .setName("user")
+        .setDescription("User (Admin/Owner only)")
+        .setRequired(false)
     ),
 
   async execute(interaction, { data, getUser }) {
-    const user = interaction.options.getUser("user") || interaction.user;
-    const userData = getUser(user.id);
+    const targetUser =
+      interaction.options.getUser("user") || interaction.user;
+
+    const requester =
+      interaction.guild.members.cache.get(interaction.user.id);
+
+    const canViewOthers =
+      requester.roles.cache.has(ADMIN_ROLE_ID) ||
+      requester.roles.cache.has(OWNER_ROLE_ID);
+
+    if (
+      targetUser.id !== interaction.user.id &&
+      !canViewOthers
+    ) {
+      return interaction.reply({
+        content: "❌ You can only view your own profile.",
+        ephemeral: true
+      });
+    }
+
+    const userData = getUser(targetUser.id);
 
     if (!userData.joinedAt) userData.joinedAt = Date.now();
+    if (!userData.bookings) userData.bookings = {};
 
-    const member = interaction.guild.members.cache.get(user.id);
+    const targetMember =
+      interaction.guild.members.cache.get(targetUser.id);
 
     let page = 1;
 
@@ -89,9 +115,10 @@ module.exports = {
     );
 
     const msg = await interaction.reply({
-      content: getPage1(user, member, data, userData),
+      content: getPage1(targetUser, targetMember, userData),
       components: [row],
-      ephemeral: true
+      ephemeral: true,
+      fetchReply: true
     });
 
     const collector = msg.createMessageComponentCollector({
@@ -99,9 +126,9 @@ module.exports = {
     });
 
     collector.on("collect", async i => {
-      if (i.user.id !== user.id) {
+      if (i.user.id !== interaction.user.id) {
         return i.reply({
-          content: "❌ This profile isn’t yours to control.",
+          content: "❌ You didn't open this profile.",
           ephemeral: true
         });
       }
@@ -109,20 +136,20 @@ module.exports = {
       if (i.customId === "profile_next") page = 2;
       if (i.customId === "profile_prev") page = 1;
 
-      const newContent =
-        page === 1
-          ? getPage1(user, member, data, userData)
-          : getPage2(user, data, userData);
-
       await i.update({
-        content: newContent,
+        content:
+          page === 1
+            ? getPage1(targetUser, targetMember, userData)
+            : getPage2(targetUser, data, userData),
         components: [row]
       });
     });
 
     collector.on("end", async () => {
       try {
-        await interaction.editReply({ components: [] });
+        await interaction.editReply({
+          components: []
+        });
       } catch {}
     });
   }
