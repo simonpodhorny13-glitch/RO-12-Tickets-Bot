@@ -150,8 +150,6 @@ client.commands = new Collection();
 // SLASH COMMAND HANDLER (ADD THIS)
 // ===============================
 
-const { Collection } = require("discord.js");
-
 client.commands = client.commands || new Collection();
 
 client.on("interactionCreate", async (interaction) => {
