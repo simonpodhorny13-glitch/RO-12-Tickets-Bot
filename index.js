@@ -143,9 +143,47 @@ client.on("messageCreate", async (message) => {
   }
 });
 
+client.commands = new Collection();
+
+
+// ===============================
+// SLASH COMMAND HANDLER (ADD THIS)
+// ===============================
+
+const { Collection } = require("discord.js");
+
+client.commands = client.commands || new Collection();
+
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  try {
+    const command = client.commands.get(interaction.commandName);
+
+    if (!command) {
+      return interaction.reply({
+        content: "❌ Command not found in bot handler.",
+        ephemeral: true
+      });
+    }
+
+    await command.execute(interaction);
+
+  } catch (err) {
+    console.error("Interaction error:", err);
+
+    if (interaction.replied || interaction.deferred) return;
+
+    await interaction.reply({
+      content: "❌ Error executing command.",
+      ephemeral: true
+    });
+  }
+});
 if (!process.env.TOKEN) {
   console.log("❌ TOKEN missing");
 } else {
+  
   client.login(process.env.TOKEN)
     .then(() => console.log("✅ Logged in"))
     .catch(console.error);
