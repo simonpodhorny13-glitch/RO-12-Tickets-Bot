@@ -1,9 +1,17 @@
 const fs = require("fs");
 
+const STAFF_CHANNEL_ID = "1519551586999730236";
+
 module.exports = {
   name: "claim",
 
   execute(message, args) {
+
+    // 📍 channel restriction
+    if (message.channel.id !== STAFF_CHANNEL_ID) {
+      return message.reply("❌ Use this command in #staff.");
+    }
+
     const role = args[0];
     const voyageId = args[1];
 
@@ -12,7 +20,7 @@ module.exports = {
     }
 
     const data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
-    const voyage = data.voyages[voyageId];
+    const voyage = data.voyages?.[voyageId];
 
     if (!voyage) {
       return message.reply("❌ Voyage not found.");
@@ -34,25 +42,25 @@ module.exports = {
 
     voyage.crew[role] = userId;
 
-    const crew = voyage.crew;
+    // ⏳ GC DEADLINE LOGIC
+    if (voyage.crew.captain && voyage.crew.fo) {
 
-    if (crew.captain && crew.fo) {
-
-      if (!crew.gc && !voyage.gcDeadline) {
+      if (!voyage.crew.gc && !voyage.gcDeadline) {
         voyage.gcDeadline = Date.now() + 24 * 60 * 60 * 1000;
 
         message.channel.send(
-`⏳ Ground Crew role unclaimed.
-Sales will open automatically within 24 hours if not claimed.`
+`⏳ Ground Crew not claimed.
+Sales will open automatically in 24h if unclaimed.`
         );
       }
 
-      if (crew.gc && voyage.gcDeadline) {
+      if (voyage.crew.gc && voyage.gcDeadline) {
         voyage.gcDeadline = null;
       }
 
-      if (crew.gc && !voyage.salesOpen) {
+      if (voyage.crew.gc && !voyage.salesOpen) {
         voyage.salesOpen = true;
+        voyage.status = "sales_open";
 
         message.channel.send(
 `🚢 SALES NOW OPEN
