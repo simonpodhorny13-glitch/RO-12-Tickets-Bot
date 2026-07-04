@@ -1,9 +1,16 @@
 const fs = require("fs");
 
+const STAFF_CHANNEL_ID = "1519551586999730236";
+
 module.exports = {
   name: "unclaim",
 
   execute(message, args) {
+
+    if (message.channel.id !== STAFF_CHANNEL_ID) {
+      return message.reply("❌ Use this command in #staff.");
+    }
+
     const userId = message.author.id;
 
     let data = {};
@@ -15,7 +22,7 @@ module.exports = {
     }
 
     if (!data.voyages) {
-      return message.reply("❌ You have no claimed voyages.");
+      return message.reply("❌ No voyages found.");
     }
 
     let found = false;
@@ -28,23 +35,31 @@ module.exports = {
         voyage.crew = { captain: null, fo: null, gc: null };
       }
 
-      // check if user is in this voyage
       const roles = ["captain", "fo", "gc"];
 
       for (const role of roles) {
         if (voyage.crew[role] === userId) {
 
-          // 🚨 BLOCK if voyage is already open
+          // 🚨 BLOCK if already open
           if (voyage.salesOpen) {
-            return message.reply(
-              "❌ Voyage already open. Request a Senior Captain+ to cancel the voyage."
-            );
+            continue; // don’t break whole system
           }
 
           voyage.crew[role] = null;
           found = true;
           removedFrom.push(`${voyageId} (${role.toUpperCase()})`);
+
+          // reset GC timer if needed
+          if (role === "gc") {
+            voyage.gcDeadline = null;
+          }
         }
+      }
+
+      // 🧠 optional: if crew becomes incomplete, close sales
+      if (!voyage.crew.captain || !voyage.crew.fo) {
+        voyage.salesOpen = false;
+        voyage.status = "scheduled";
       }
     }
 
