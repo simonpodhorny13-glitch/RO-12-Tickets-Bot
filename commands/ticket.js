@@ -1,22 +1,30 @@
 const fs = require("fs");
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder } = require("discord.js");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("ticket")
-    .setDescription("View your RO-12 ticket")
+    .setDescription("View your voyage ticket")
     .addStringOption(option =>
-      option
-        .setName("voyage")
+      option.setName("voyage")
         .setDescription("Voyage ID")
         .setRequired(true)
     ),
 
   async execute(interaction) {
     const voyageId = interaction.options.getString("voyage");
-
-    const data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
     const userId = interaction.user.id;
+
+    let data = {};
+
+    try {
+      data = JSON.parse(fs.readFileSync("./data.json", "utf8"));
+    } catch (err) {
+      return interaction.reply({
+        content: "❌ Data system error.",
+        ephemeral: true
+      });
+    }
 
     const voyage = data.voyages?.[voyageId];
 
@@ -27,104 +35,96 @@ module.exports = {
       });
     }
 
-    // 🔍 find booking
-    let bookingType = null;
-    let bookingLocation = null;
+    const user = data.users?.[userId];
 
-    const cabinEntry = Object.entries(voyage.cabinMap || {})
-      .find(([, id]) => id === userId);
-
-    const seatEntry = Object.entries(voyage.seatMap || {})
-      .find(([, id]) => id === userId);
-
-    // 🚨 prevent dual booking
-    if (cabinEntry && seatEntry) {
+    if (!user || !user.bookings || !user.bookings[voyageId]) {
       return interaction.reply({
-        content: "❌ Dual booking detected. Please contact crew to fix your reservation.",
+        content: "❌ You have no booking for this voyage.",
         ephemeral: true
       });
     }
 
-    if (cabinEntry) {
-      bookingType = "🛏️ Cabin";
-      bookingLocation = cabinEntry[0];
-    } else if (seatEntry) {
-      bookingType = "💺 Seat";
-      bookingLocation = seatEntry[0];
-    }
+    const booking = user.bookings[voyageId];
 
-    if (!bookingType) {
-      return interaction.reply({
-        content: "❌ You don't have a ticket for this voyage.",
-        ephemeral: true
-      });
-    }
+    // =========================
+    // 🧠 SAFE DATA FALLBACKS
+    // =========================
+    const cabinMap = voyage.cabinMap || {};
+    const seatMap = voyage.seatMap || {};
+    const crew = voyage.crew || { captain: null, fo: null, gc: null };
 
-    // 🚦 status logic
+    const captain = crew.captain ? "✅ Assigned" : "❌ Missing";
+    const fo = crew.fo ? "✅ Assigned" : "❌ Missing";
+    const gc = crew.gc ? "✅ Assigned" : "❌ Missing";
+
+    // =========================
+    // 🚢 STATUS LOGIC
+    // =========================
     let status = "🟡 Preparing";
 
-    if (voyage.cancelled) status = "❌ Cancelled";
-    else if (voyage.salesOpen) status = "🟢 Sales Open";
-    else if (voyage.gcDeadline) status = "🟠 Awaiting Crew Completion";
+    if (voyage.cancelled) {
+      status = "🔴 Cancelled";
+    } else if (voyage.salesOpen) {
+      status = "🟢 Sales Open";
+    } else if (crew.captain && crew.fo && crew.gc) {
+      status = "🟢 Fully Staffed";
+    } else if (crew.captain && crew.fo) {
+      status = "🟡 Awaiting Ground Crew";
+    }
 
-    const isCaptain = voyage.crew?.captain === userId;
-    const isFO = voyage.crew?.fo === userId;
-    const isGC = voyage.crew?.gc === userId;
+    // =========================
+    // 📅 FIXED DEPARTURE FORMAT
+    // =========================
+    const departure = voyage.departure
+      ? voyage.departure
+      : `${voyage.date || "TBA"} ${voyage.time || ""}`;
 
-    const role =
-      isCaptain ? "👨‍✈️ Captain" :
-      isFO ? "🧑‍✈️ First Officer" :
-      isGC ? "🧰 Ground Crew" :
-      "🧳 Passenger";
+    // =========================
+    // 💺 BOOKING INFO
+    // =========================
+    let bookingInfo = "";
 
-    const embed = new EmbedBuilder()
-      .setColor(voyage.cancelled ? 0xff3b3b : 0x00bfff)
-      .setTitle("🎟️ RO-12 BOARDING PASS")
-      .setDescription(`Voyage **${voyageId}**`)
-      .addFields(
-        {
-          name: "🗺 Route",
-          value: `${voyage.from} → ${voyage.to}`,
-          inline: false
-        },
-        {
-          name: "🚢 Ship",
-          value: voyage.ship,
-          inline: true
-        },
-        {
-          name: "⏱ Departure",
-          value: voyage.departure || "TBA",
-          inline: true
-        },
-        {
-          name: "🚦 Status",
-          value: status,
-          inline: false
-        },
-        {
-          name: "🎫 Booking",
-          value: `${bookingType}: ${bookingLocation}`,
-          inline: true
-        },
-        {
-          name: "🧭 Role",
-          value: role,
-          inline: true
-        },
-        {
-          name: "👥 Crew Status",
-          value:
-            `Captain: ${voyage.crew?.captain ? "✔" : "❌"}\n` +
-            `FO: ${voyage.crew?.fo ? "✔" : "❌"}\n` +
-            `GC: ${voyage.crew?.gc ? "✔" : "❌"}`
-        }
-      )
-      .setFooter({ text: "RO-12 Voyage System • Boarding Pass" })
-      .setTimestamp();
+    if (booking.type === "cabin") {
+      bookingInfo = `Cabin: ${booking.location}`;
+    } else if (booking.type === "seat") {
+      bookingInfo = `Seat: ${booking.location}`;
+    }
 
+    const paid = booking.paid || 0;
+
+    // =========================
+    // 🎟️ TICKET OUTPUT
+    // =========================
     return interaction.reply({
-      embeds: [embed],
+      content:
+`🎟️ RO-12 BOARDING PASS
+
+Voyage ID
+${voyageId}
+
+Route
+${voyage.from || "TBA"} → ${voyage.to || "TBA"}
+
+Ship
+${voyage.ship || "TBA"}
+
+Departure
+${departure}
+
+Status
+${status}
+
+Crew Status
+Captain: ${captain}
+First Officer: ${fo}
+Ground Crew: ${gc}
+
+Your Booking
+${bookingInfo}
+
+Payment
+💰 Paid: $${paid}
+`,
       ephemeral: true
     });
   }
