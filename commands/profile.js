@@ -37,19 +37,24 @@ function getPage1(user, member, userData) {
 📄 Page 1/2`;
 }
 
-function getPage2(user, data, userData) {
-  const userTx = (data.transactions || []).filter(t => t.userId === user.id);
+function getPage2(user, member, data) {
+  const userTx = (data.transactions || []).filter(
+    t => t.userId === user.id
+  );
 
   const spent = userTx
     .filter(t => t.amount < 0)
     .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-  const tickets = userTx.filter(t =>
-    t.type === "seat_booking" ||
-    t.type === "cabin_booking"
+  const tickets = userTx.filter(
+    t =>
+      t.type === "seat_booking" ||
+      t.type === "cabin_booking"
   ).length;
 
-  const timeInServer = Date.now() - userData.joinedAt;
+  const timeInServer = member?.joinedTimestamp
+    ? Date.now() - member.joinedTimestamp
+    : 0;
 
   return `📊 **Stats for ${user.username}**
 
@@ -94,8 +99,6 @@ module.exports = {
 
     const userData = getUser(targetUser.id);
 
-    const targetMember =
-  interaction.guild.members.cache.get(targetUser.id);
     if (!userData.bookings) userData.bookings = {};
 
     const targetMember =
@@ -141,7 +144,7 @@ module.exports = {
         content:
           page === 1
             ? getPage1(targetUser, targetMember, userData)
-            : getPage2(targetUser, data, userData),
+            : getPage2(targetUser, targetMember, data),
         components: [row]
       });
     });
