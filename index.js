@@ -123,11 +123,7 @@ client.on("messageCreate", async (message) => {
       const u = getUser(message.author.id);
       return message.reply(`💰 $${u.balance}`);
     }
-
-    if (message.content === "!ping") {
-      return message.reply("🏓 Pong!");
-    }
-  }
+}
 });
 
 // ===================== INTERACTIONS =====================
