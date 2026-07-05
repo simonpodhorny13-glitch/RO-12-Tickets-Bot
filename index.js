@@ -26,26 +26,35 @@ const client = new Client({
 client.commands = new Collection();
 client.prefixCommands = new Collection();
 
-// ===================== DATA =====================
+// ===================== DATA HELPERS =====================
 function loadData() {
   if (!fs.existsSync("data.json")) {
-    return {
+    const init = {
       users: {},
       voyages: {},
       settings: { nextVoyageId: 1 },
       transactions: []
     };
+    fs.writeFileSync("data.json", JSON.stringify(init, null, 2));
+    return init;
   }
+
   return JSON.parse(fs.readFileSync("data.json", "utf8"));
 }
 
-let data = loadData();
-
-function saveData() {
+function saveData(data) {
   fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
 }
 
+// ALWAYS get fresh data
+function getData() {
+  return loadData();
+}
+
+// ===================== USER HANDLER =====================
 function getUser(id) {
+  const data = loadData();
+
   if (!data.users[id]) {
     data.users[id] = {
       balance: 250,
@@ -53,8 +62,10 @@ function getUser(id) {
       bookings: {},
       travelHistory: []
     };
-    saveData();
+
+    saveData(data);
   }
+
   return data.users[id];
 }
 
@@ -95,7 +106,10 @@ client.on("messageCreate", async (message) => {
   if (!command) return;
 
   try {
-    await command.execute(message, args, { data, getUser });
+    await command.execute(message, args, {
+      data: getData(),
+      getUser
+    });
   } catch (err) {
     console.error(err);
     message.reply("❌ Error executing command");
@@ -103,6 +117,8 @@ client.on("messageCreate", async (message) => {
 
   // legacy shortcuts
   if (message.channel.id === BOTS_CHANNEL_ID) {
+    const data = getData();
+
     if (message.content === "!balance") {
       const u = getUser(message.author.id);
       return message.reply(`💰 $${u.balance}`);
@@ -129,7 +145,10 @@ client.on("interactionCreate", async (interaction) => {
         });
       }
 
-      await command.execute(interaction, { data, getUser });
+      await command.execute(interaction, {
+        data: getData(),
+        getUser
+      });
 
     } catch (err) {
       console.error(err);
