@@ -94,7 +94,8 @@ module.exports = {
 
     const userData = getUser(targetUser.id);
 
-    if (!userData.joinedAt) userData.joinedAt = Date.now();
+    const targetMember =
+  interaction.guild.members.cache.get(targetUser.id);
     if (!userData.bookings) userData.bookings = {};
 
     const targetMember =
