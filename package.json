@@ -1,16 +1,16 @@
 {
-  "name": "ro12-tickets-bot",
-  "version": "1.0.1",
-  "main": "index.js",
-  "engines": {
-    "node": "20.x"
-  },
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "better-sqlite3": "^11.7.0",
+  "name": "ro12-tickets-bot",
+  "version": "1.0.1",
+  "main": "index.js",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
     "discord.js": "^14.17.0",
-    "express": "^4.21.0"
-  }
+    "express": "^4.21.0"
+  }
 }
