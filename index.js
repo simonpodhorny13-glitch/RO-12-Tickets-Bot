@@ -1,17 +1,23 @@
 const { Client, GatewayIntentBits, Collection } = require("discord.js");
-const fs = require("fs");
 const express = require("express");
+
+// SQLite database
+const db = require("./database");
 
 // ===================== CONFIG =====================
 const BOTS_CHANNEL_ID = "1518998081713213520";
-const STAFF_CHANNEL_ID = "1519551586999730236";
 
 // ===================== EXPRESS =====================
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => res.send("RO-12 bot is live"));
-app.listen(PORT, () => console.log("Server running"));
+app.get("/", (req, res) => {
+  res.send("RO-12 bot is live");
+});
+
+app.listen(PORT, () => {
+  console.log("Server running");
+});
 
 // ===================== CLIENT =====================
 const client = new Client({
@@ -26,51 +32,10 @@ const client = new Client({
 client.commands = new Collection();
 client.prefixCommands = new Collection();
 
-// ===================== DATA HELPERS =====================
-function loadData() {
-  if (!fs.existsSync("data.json")) {
-    const init = {
-      users: {},
-      voyages: {},
-      settings: { nextVoyageId: 1 },
-      transactions: []
-    };
-    fs.writeFileSync("data.json", JSON.stringify(init, null, 2));
-    return init;
-  }
-
-  return JSON.parse(fs.readFileSync("data.json", "utf8"));
-}
-
-function saveData(data) {
-  fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
-}
-
-// ALWAYS get fresh data
-function getData() {
-  return loadData();
-}
-
-// ===================== USER HANDLER =====================
-function getUser(id) {
-  const data = loadData();
-
-  if (!data.users[id]) {
-    data.users[id] = {
-      balance: 250,
-      firstSeen: Date.now(),
-      bookings: {},
-      travelHistory: []
-    };
-
-    saveData(data);
-  }
-
-  return data.users[id];
-}
-
 // ===================== COMMAND LOADER =====================
 try {
+  const fs = require("fs");
+
   const commandFiles = fs
     .readdirSync("./commands")
     .filter(f => f.endsWith(".js"));
@@ -94,12 +59,17 @@ try {
   console.error("Command loader error:", err);
 }
 
+
 // ===================== PREFIX COMMANDS =====================
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   if (!message.content.startsWith("!")) return;
 
-  const args = message.content.slice(1).trim().split(/ +/);
+  const args = message.content
+    .slice(1)
+    .trim()
+    .split(/ +/);
+
   const commandName = args.shift().toLowerCase();
 
   const command = client.prefixCommands.get(commandName);
@@ -107,32 +77,38 @@ client.on("messageCreate", async (message) => {
 
   try {
     await command.execute(message, args, {
-      data: getData(),
-      getUser
+      db
     });
+
   } catch (err) {
     console.error(err);
     message.reply("❌ Error executing command");
   }
 
-  // legacy shortcuts
-  if (message.channel.id === BOTS_CHANNEL_ID) {
-    const data = getData();
 
-    if (message.content === "!balance") {
-      const u = getUser(message.author.id);
-      return message.reply(`💰 $${u.balance}`);
-    }
-}
+  // legacy shortcut
+  if (
+    message.channel.id === BOTS_CHANNEL_ID &&
+    message.content === "!balance"
+  ) {
+    const user = db.getUser(message.author.id);
+
+    return message.reply(
+      `💰 $${user.balance}`
+    );
+  }
 });
+
 
 // ===================== INTERACTIONS =====================
 client.on("interactionCreate", async (interaction) => {
 
-  // ================= SLASH COMMANDS =================
+  // Slash commands
   if (interaction.isChatInputCommand()) {
+
     try {
-      const command = client.commands.get(interaction.commandName);
+      const command =
+        client.commands.get(interaction.commandName);
 
       if (!command) {
         return interaction.reply({
@@ -142,11 +118,12 @@ client.on("interactionCreate", async (interaction) => {
       }
 
       await command.execute(interaction, {
-        data: getData(),
-        getUser
+        db
       });
 
+
     } catch (err) {
+
       console.error(err);
 
       if (!interaction.replied) {
@@ -158,22 +135,26 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // ================= BUTTONS =================
+
+  // Buttons
   if (interaction.isButton()) {
 
-    if (interaction.customId.startsWith("voyage_help_")) {
+    if (
+      interaction.customId.startsWith("voyage_help_")
+    ) {
+
       return interaction.reply({
         content:
           "🛳 **How to book a voyage:**\n\n" +
           "1. Use `/bookseat` or `/bookcabin`\n" +
           "2. Enter Voyage ID\n" +
-          "3. Choose your seat/cabin\n\n" +
-          "💡 Example: `/bookseat voyage:0001 seat:3A`",
+          "3. Choose your seat/cabin",
         ephemeral: true
       });
     }
   }
 });
+
 
 // ===================== LOGIN =====================
 client.login(process.env.TOKEN);
